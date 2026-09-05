@@ -57,7 +57,7 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
     };load();return()=>{cancelled=true;};
   },[symbol,timeframe]);
 
-  const pointFromEvent=(e:PointerEvent<HTMLDivElement>):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
+  const pointFromEvent=(e:{currentTarget:Element;clientX:number;clientY:number}):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const isDrawTool=selectedTool!=="Crosshair";
 
   const updateCrosshair=(e:PointerEvent<HTMLDivElement>)=>{
@@ -69,15 +69,15 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   };
   const clearCrosshair=()=>chartRef.current?.clearCrosshairPosition();
 
-  const handlePointerDown=(e:PointerEvent<HTMLDivElement>)=>{
+  const handlePointerDown=(e:PointerEvent<SVGSVGElement>)=>{
     if(!isDrawTool||showTools||showFibSettings)return;
     e.preventDefault();
     const p=pointFromEvent(e);
     if(selectedTool==="Horizontal line"||selectedTool==="Vertical line"){setDrawings(d=>[...d,{tool:selectedTool,a:p,b:p}]);return;}
     setDraftStart(p);setDraftEnd(p);e.currentTarget.setPointerCapture?.(e.pointerId);
   };
-  const handlePointerMove=(e:PointerEvent<HTMLDivElement>)=>{if(!draftStart)return;setDraftEnd(pointFromEvent(e));};
-  const handlePointerUp=(e:PointerEvent<HTMLDivElement>)=>{if(!draftStart)return;const b=pointFromEvent(e);const dx=b.x-draftStart.x,dy=b.y-draftStart.y;if(Math.hypot(dx,dy)<5){setDraftStart(null);setDraftEnd(null);return;}setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b}]);setDraftStart(null);setDraftEnd(null);};
+  const handlePointerMove=(e:PointerEvent<SVGSVGElement>)=>{if(!draftStart)return;setDraftEnd(pointFromEvent(e));};
+  const handlePointerUp=(e:PointerEvent<SVGSVGElement>)=>{if(!draftStart)return;const b=pointFromEvent(e);const dx=b.x-draftStart.x,dy=b.y-draftStart.y;if(Math.hypot(dx,dy)<5){setDraftStart(null);setDraftEnd(null);return;}setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b}]);setDraftStart(null);setDraftEnd(null);};
   const cancelDrawing=()=>{setDraftStart(null);setDraftEnd(null);};
 
   const renderDrawing=(d:Drawing,i:number)=>{
