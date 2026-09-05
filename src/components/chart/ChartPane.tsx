@@ -27,6 +27,7 @@ export function ChartPane({ symbol, timeframe, height = 400, onSymbolClick }: Ch
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const colorsRef = useRef({ up: defaultUp, down: defaultDown });
+  const lastTapRef = useRef(0);
   const [showColors, setShowColors] = useState(false);
   const [upColor, setUpColor] = useState(defaultUp);
   const [downColor, setDownColor] = useState(defaultDown);
@@ -144,14 +145,26 @@ export function ChartPane({ symbol, timeframe, height = 400, onSymbolClick }: Ch
     try { localStorage.setItem(`jk-candle-colors-${symbol}`, JSON.stringify({ up, down })); } catch {}
   };
 
+  const handleTouchEnd = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 450) {
+      setShowColors(true);
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+    }
+  };
+
   return (
     <div
       className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white"
       onDoubleClick={() => setShowColors(true)}
+      onTouchEnd={handleTouchEnd}
     >
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onSymbolClick?.(); }}
+        onTouchEnd={(e) => e.stopPropagation()}
         className="absolute top-2 left-2 z-10 text-xs bg-black/70 px-2 py-1 rounded border border-[#333] hover:border-white transition-colors"
         title="Change symbol"
       >
@@ -165,6 +178,7 @@ export function ChartPane({ symbol, timeframe, height = 400, onSymbolClick }: Ch
           className="absolute top-12 left-2 z-50 w-64 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
         >
           <div className="text-sm font-semibold mb-3 text-white">Candle Colors</div>
 
