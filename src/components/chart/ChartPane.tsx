@@ -26,11 +26,13 @@ function getFibLevels(){
 }
 
 export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneProps){
-  const containerRef=useRef<HTMLDivElement>(null),chartRef=useRef<IChartApi|null>(null),seriesRef=useRef<ISeriesApi<"Candlestick">|null>(null);
+  const containerRef=useRef<HTMLDivElement>(null), chartRef=useRef<IChartApi|null>(null), seriesRef=useRef<ISeriesApi<"Candlestick">|null>(null);
   const colorsRef=useRef(getCandleColors());
-  const [showTools,setShowTools]=useState(false),[selectedTool,setSelectedTool]=useState("Crosshair");
-  const [showFibSettings,setShowFibSettings]=useState(false),[fibLevels,setFibLevels]=useState<number[]>(getFibLevels());
-  const [drawings,setDrawings]=useState<Drawing[]>([]),[draftStart,setDraftStart]=useState<Point|null>(null),[draftEnd,setDraftEnd]=useState<Point|null>(null);
+  const [showTools,setShowTools]=useState(false), [selectedTool,setSelectedTool]=useState("Crosshair");
+  const [showFibSettings,setShowFibSettings]=useState(false), [fibLevels,setFibLevels]=useState<number[]>(getFibLevels());
+  const [drawings,setDrawings]=useState<Drawing[]>([]), [draftStart,setDraftStart]=useState<Point|null>(null), [draftEnd,setDraftEnd]=useState<Point|null>(null);
+  const [crosshair,setCrosshair]=useState<Point>({x:0,y:0});
+  const crosshairReadyRef=useRef(false);
 
   const applyCandleColors=(up:string,down:string)=>{colorsRef.current={up,down};seriesRef.current?.applyOptions({upColor:up,downColor:down,borderUpColor:up,borderDownColor:down,wickUpColor:up,wickDownColor:down});};
 
@@ -47,7 +49,9 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
     const mo=new MutationObserver(theme);mo.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
     window.addEventListener(COLOR_EVENT,colorChange);window.addEventListener(FIB_EVENT,fibChange);
     const ro=new ResizeObserver(()=>containerRef.current&&chart.applyOptions({width:Math.max(1,containerRef.current.clientWidth),height}));ro.observe(containerRef.current);
-    return()=>{mo.disconnect();ro.disconnect();window.removeEventListener(COLOR_EVENT,colorChange);window.removeEventListener(FIB_EVENT,fibChange);chart.clearCrosshairPosition();chart.remove();chartRef.current=null;seriesRef.current=null;};
+    const initial=()=>{if(containerRef.current&&!crosshairReadyRef.current){setCrosshair({x:containerRef.current.clientWidth/2,y:containerRef.current.clientHeight/2});crosshairReadyRef.current=true;}};
+    requestAnimationFrame(initial);
+    return()=>{mo.disconnect();ro.disconnect();window.removeEventListener(COLOR_EVENT,colorChange);window.removeEventListener(FIB_EVENT,fibChange);chart.remove();chartRef.current=null;seriesRef.current=null;crosshairReadyRef.current=false;};
   },[height]);
 
   useEffect(()=>{
@@ -60,54 +64,78 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   const pointFromEvent=(e:{currentTarget:Element;clientX:number;clientY:number}):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const isDrawTool=selectedTool!=="Crosshair";
 
-  const updateCrosshair=(e:PointerEvent<HTMLDivElement>)=>{
-    const chart=chartRef.current,series=seriesRef.current;if(!chart||!series)return;
+  const updateCrosshair=(e:PointerEvent<Element>)=>{
     const p=pointFromEvent(e);
+    setCrosshair(p);
+    const chart=chartRef.current,series=seriesRef.current;if(!chart||!series)return;
     const time=chart.timeScale().coordinateToTime(p.x);
     const price=series.coordinateToPrice(p.y);
     if(time!==null&&price!==null)chart.setCrosshairPosition(price,time,series);
   };
-  const clearCrosshair=()=>chartRef.current?.clearCrosshairPosition();
 
-  const handlePointerDown=(e:PointerEvent<SVGSVGElement>)=>{
+  const handlePointerDown=(e:PointerEvent<Element>)=>{
     if(!isDrawTool||showTools||showFibSettings)return;
     e.preventDefault();
     const p=pointFromEvent(e);
-    if(selectedTool==="Horizontal line"||selectedTool==="Vertical line"){setDrawings(d=>[...d,{tool:selectedTool,a:p,b:p}]);return;}
-    setDraftStart(p);setDraftEnd(p);e.currentTarget.setPointerCapture?.(e.pointerId);
+    setCrosshair(p);
+    if(selectedTool==="Horizontal line"||selectedTool==="Vertical line"){
+      setDrawings(d=>[...d,{tool:selectedTool,a:p,b:p}]);
+      return;
+    }
+    setDraftStart(p);setDraftEnd(p);
+    try{(e.currentTarget as Element).setPointerCapture?.(e.pointerId);}catch{}
   };
-  const handlePointerMove=(e:PointerEvent<SVGSVGElement>)=>{if(!draftStart)return;setDraftEnd(pointFromEvent(e));};
-  const handlePointerUp=(e:PointerEvent<SVGSVGElement>)=>{if(!draftStart)return;const b=pointFromEvent(e);const dx=b.x-draftStart.x,dy=b.y-draftStart.y;if(Math.hypot(dx,dy)<5){setDraftStart(null);setDraftEnd(null);return;}setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b}]);setDraftStart(null);setDraftEnd(null);};
+  const handlePointerMove=(e:PointerEvent<Element>)=>{
+    const p=pointFromEvent(e);setCrosshair(p);
+    if(!draftStart)return;
+    setDraftEnd(p);
+  };
+  const handlePointerUp=(e:PointerEvent<Element>)=>{
+    if(!draftStart)return;
+    const b=pointFromEvent(e);setCrosshair(b);
+    const dx=b.x-draftStart.x,dy=b.y-draftStart.y;
+    if(Math.hypot(dx,dy)<5){setDraftStart(null);setDraftEnd(null);return;}
+    setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b}]);setDraftStart(null);setDraftEnd(null);
+  };
   const cancelDrawing=()=>{setDraftStart(null);setDraftEnd(null);};
 
   const renderDrawing=(d:Drawing,i:number)=>{
     const {a,b,tool}=d;
-    if(tool==="Horizontal line")return <line key={i} x1="0" y1={a.y} x2="100%" y2={a.y} stroke="currentColor" strokeWidth="1.2"/>;
-    if(tool==="Vertical line")return <line key={i} x1={a.x} y1="0" x2={a.x} y2="100%" stroke="currentColor" strokeWidth="1.2"/>;
-    if(tool==="Rectangle")return <rect key={i} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} fill="none" stroke="currentColor" strokeWidth="1.2"/>;
+    if(tool==="Horizontal line")return <line key={i} x1="0" y1={a.y} x2="100%" y2={a.y} stroke="currentColor" strokeWidth="1.5"/>;
+    if(tool==="Vertical line")return <line key={i} x1={a.x} y1="0" x2={a.x} y2="100%" stroke="currentColor" strokeWidth="1.5"/>;
+    if(tool==="Rectangle")return <rect key={i} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} fill="none" stroke="currentColor" strokeWidth="1.5"/>;
     if(tool==="Fibonacci Retracement")return <g key={i}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="currentColor" strokeWidth="1"/>{fibLevels.map(l=><g key={l}><line x1="0" y1={a.y+(b.y-a.y)*l} x2="100%" y2={a.y+(b.y-a.y)*l} stroke="currentColor" strokeWidth="1" opacity=".65"/><text x="6" y={a.y+(b.y-a.y)*l-3} fontSize="10" fill="currentColor">{(l*100).toFixed(l%1===0?0:1)}%</text></g>)}</g>;
-    if(tool==="Ray"){const vx=b.x-a.x,vy=b.y-a.y,t=Math.max(1,(Math.max(containerRef.current?.clientWidth||1,containerRef.current?.clientHeight||1)*2)/Math.max(Math.abs(vx),Math.abs(vy),1));return <line key={i} x1={a.x} y1={a.y} x2={a.x+vx*t} y2={a.y+vy*t} stroke="currentColor" strokeWidth="1.2"/>;}
-    return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="currentColor" strokeWidth="1.2"/>;
+    if(tool==="Ray"){const vx=b.x-a.x,vy=b.y-a.y,t=Math.max(1,(Math.max(containerRef.current?.clientWidth||1,containerRef.current?.clientHeight||1)*2)/Math.max(Math.abs(vx),Math.abs(vy),1));return <line key={i} x1={a.x} y1={a.y} x2={a.x+vx*t} y2={a.y+vy*t} stroke="currentColor" strokeWidth="1.5"/>;}
+    return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="currentColor" strokeWidth="1.5"/>;
   };
   const draft=draftStart&&draftEnd?{tool:selectedTool,a:draftStart,b:draftEnd}:null;
 
   const saveFibLevels=(levels:number[])=>{const clean=levels.map(Number).filter(Number.isFinite).sort((a,b)=>a-b);setFibLevels(clean);try{localStorage.setItem("jk-fib-levels",JSON.stringify(clean));window.dispatchEvent(new Event(FIB_EVENT));}catch{}};
 
-  return <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white">
-    <div className="absolute top-2 left-2 z-30 flex items-center gap-1">
+  return <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white text-white">
+    <div className="absolute top-2 left-2 z-40 flex items-center gap-1">
       <button type="button" onClick={e=>{e.stopPropagation();onSymbolClick?.();}} className="text-xs bg-black/70 px-2 py-1 rounded border border-[#333]">{symbol} · {timeframe}</button>
       <button type="button" onClick={e=>{e.stopPropagation();setShowTools(v=>!v);}} className={`w-7 h-7 flex items-center justify-center rounded border ${showTools?"bg-white text-black border-white":"bg-black/70 text-[#aaa] border-[#333]"}`}><Wrench size={14}/></button>
     </div>
     <div ref={containerRef} className="w-full h-full" />
 
-    {selectedTool==="Crosshair"&&<div className="absolute inset-0 z-20 cursor-crosshair touch-none" onPointerDown={e=>{updateCrosshair(e);e.currentTarget.setPointerCapture?.(e.pointerId);}} onPointerMove={updateCrosshair} onPointerUp={updateCrosshair} onPointerLeave={clearCrosshair} onPointerCancel={clearCrosshair}/>} 
-
-    <svg className={`absolute inset-0 w-full h-full ${isDrawTool?"pointer-events-auto touch-none":"pointer-events-none"}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={cancelDrawing}>
+    <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" aria-hidden="true">
       {drawings.map(renderDrawing)}{draft&&renderDrawing(draft,9999)}
+      {crosshairReadyRef.current&&<g className="text-white/70"><line x1={crosshair.x} y1="0" x2={crosshair.x} y2="100%" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4"/><line x1="0" y1={crosshair.y} x2="100%" y2={crosshair.y} stroke="currentColor" strokeWidth="1" strokeDasharray="4 4"/></g>}
     </svg>
-    {draftStart&&<div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 rounded bg-black/80 border border-[#333] px-2 py-1 text-[11px] text-white pointer-events-none">Tap second point to place {selectedTool}</div>}
 
-    {showTools&&<div className="absolute top-11 left-2 z-40 w-56 rounded-lg border border-[#333] bg-[#0a0a0a] p-2 shadow-2xl"><div className="px-2 py-1 text-xs font-semibold text-[#888]">Drawing tools</div>{TOOLS.map(t=><button key={t} type="button" onClick={()=>{setSelectedTool(t);setShowTools(false);cancelDrawing();}} className={`w-full rounded px-2 py-2 text-left text-sm ${selectedTool===t?"bg-white text-black":"text-white hover:bg-[#1a1a1a]"}`}>{t}</button>)}<button type="button" onClick={()=>{setShowFibSettings(true);setShowTools(false);}} className="w-full rounded px-2 py-2 text-left text-sm text-[#aaa]">Fibonacci Settings</button><button type="button" onClick={()=>setDrawings([])} className="w-full mt-1 rounded px-2 py-2 text-left text-sm text-[#aaa]">Clear drawings</button></div>}
-    {showFibSettings&&<div className="absolute top-11 left-2 z-50 w-64 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 shadow-2xl"><div className="text-sm font-semibold text-white mb-2">Fibonacci Settings</div><div className="max-h-52 overflow-y-auto space-y-2">{fibLevels.map((l,i)=><div key={`${i}-${l}`} className="flex gap-2 items-center"><span className="text-xs text-[#aaa] w-5">{i+1}</span><input type="number" step="0.001" value={l} onChange={e=>{const n=[...fibLevels];n[i]=Number(e.target.value);setFibLevels(n);}} className="w-full rounded border border-[#333] bg-black px-2 py-1.5 text-sm text-white"/><button type="button" onClick={()=>setFibLevels(fibLevels.filter((_,j)=>j!==i))} className="text-[#888]">×</button></div>)}</div><div className="flex gap-2 mt-3"><button type="button" onClick={()=>setFibLevels([...fibLevels,1.618])} className="flex-1 rounded border border-[#333] px-2 py-2 text-xs text-white">+ 1.618</button><button type="button" onClick={()=>saveFibLevels(fibLevels)} className="flex-1 rounded bg-white px-2 py-2 text-xs text-black">Save</button></div><button type="button" onClick={()=>{setFibLevels(DEFAULT_FIB_LEVELS);saveFibLevels(DEFAULT_FIB_LEVELS);}} className="w-full mt-2 rounded border border-[#333] px-2 py-2 text-xs text-[#aaa]">Reset defaults</button><button type="button" onClick={()=>setShowFibSettings(false)} className="w-full mt-2 rounded border border-[#333] px-2 py-2 text-xs text-[#aaa]">Done</button></div>}
+    <div
+      className="absolute inset-0 z-20 touch-none"
+      style={{cursor:isDrawTool?"crosshair":"crosshair",touchAction:"none"}}
+      onPointerDown={isDrawTool?handlePointerDown:updateCrosshair}
+      onPointerMove={isDrawTool?handlePointerMove:updateCrosshair}
+      onPointerUp={isDrawTool?handlePointerUp:updateCrosshair}
+      onPointerCancel={isDrawTool?cancelDrawing:undefined}
+    />
+
+    {draftStart&&<div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 rounded bg-black/80 border border-[#333] px-2 py-1 text-[11px] text-white pointer-events-none">Move finger to draw {selectedTool}</div>}
+
+    {showTools&&<div className="absolute top-11 left-2 z-50 w-56 rounded-lg border border-[#333] bg-[#0a0a0a] p-2 shadow-2xl"><div className="px-2 py-1 text-xs font-semibold text-[#888]">Drawing tools</div>{TOOLS.map(t=><button key={t} type="button" onClick={()=>{setSelectedTool(t);setShowTools(false);cancelDrawing();}} className={`w-full rounded px-2 py-2 text-left text-sm ${selectedTool===t?"bg-white text-black":"text-white hover:bg-[#1a1a1a]"}`}>{t}</button>)}<button type="button" onClick={()=>{setShowFibSettings(true);setShowTools(false);}} className="w-full rounded px-2 py-2 text-left text-sm text-[#aaa]">Fibonacci Settings</button><button type="button" onClick={()=>setDrawings([])} className="w-full mt-1 rounded px-2 py-2 text-left text-sm text-[#aaa]">Clear drawings</button></div>}
+    {showFibSettings&&<div className="absolute top-11 left-2 z-[60] w-64 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 shadow-2xl"><div className="text-sm font-semibold text-white mb-2">Fibonacci Settings</div><div className="max-h-52 overflow-y-auto space-y-2">{fibLevels.map((l,i)=><div key={`${i}-${l}`} className="flex gap-2 items-center"><span className="text-xs text-[#aaa] w-5">{i+1}</span><input type="number" step="0.001" value={l} onChange={e=>{const n=[...fibLevels];n[i]=Number(e.target.value);setFibLevels(n);}} className="w-full rounded border border-[#333] bg-black px-2 py-1.5 text-sm text-white"/><button type="button" onClick={()=>setFibLevels(fibLevels.filter((_,j)=>j!==i))} className="text-[#888]">×</button></div>)}</div><div className="flex gap-2 mt-3"><button type="button" onClick={()=>setFibLevels([...fibLevels,1.618])} className="flex-1 rounded border border-[#333] px-2 py-2 text-xs text-white">+ 1.618</button><button type="button" onClick={()=>saveFibLevels(fibLevels)} className="flex-1 rounded bg-white px-2 py-2 text-xs text-black">Save</button></div><button type="button" onClick={()=>{setFibLevels(DEFAULT_FIB_LEVELS);saveFibLevels(DEFAULT_FIB_LEVELS);}} className="w-full mt-2 rounded border border-[#333] px-2 py-2 text-xs text-[#aaa]">Reset defaults</button><button type="button" onClick={()=>setShowFibSettings(false)} className="w-full mt-2 rounded border border-[#333] px-2 py-2 text-xs text-[#aaa]">Done</button></div>}
   </div>;
 }
