@@ -7,11 +7,26 @@ import { ChartPane } from "@/components/chart/ChartPane";
 import { LayoutSelector } from "@/components/chart/LayoutSelector";
 import { TimeframeSelector } from "@/components/chart/TimeframeSelector";
 
+const SYMBOLS = [
+  "BTCUSDT",
+  "ETHUSDT",
+  "BNBUSDT",
+  "SOLUSDT",
+  "XRPUSDT",
+  "DOGEUSDT",
+  "ADAUSDT",
+  "AVAXUSDT",
+  "LINKUSDT",
+  "LTCUSDT",
+  "TRXUSDT",
+  "DOTUSDT",
+];
+
 function ChartContent() {
   const searchParams = useSearchParams();
   const symbolFromUrl = searchParams.get("symbol");
   const { layout, charts, setLayout, setChartSymbol, updateChart } = useChartStore();
-  const [symbolPicker, setSymbolPicker] = useState<{ id: string; symbol: string } | null>(null);
+  const [symbolPicker, setSymbolPicker] = useState<string | null>(null);
 
   useEffect(() => {
     if (symbolFromUrl && charts[0]) setChartSymbol(charts[0].id, symbolFromUrl);
@@ -21,11 +36,9 @@ function ChartContent() {
     layout === 1 ? "grid-cols-1" : layout === 2 ? "grid-cols-1 md:grid-cols-2" : layout === 4 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
   const height = layout === 1 ? 600 : layout === 2 ? 450 : 320;
 
-  const chooseSymbol = () => {
+  const chooseSymbol = (symbol: string) => {
     if (!symbolPicker) return;
-    const value = symbolPicker.symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!value) return;
-    setChartSymbol(symbolPicker.id, value);
+    setChartSymbol(symbolPicker, symbol);
     setSymbolPicker(null);
   };
 
@@ -40,7 +53,12 @@ function ChartContent() {
       <div className={`flex-1 grid ${gridClass} gap-1 p-1 overflow-auto`}>
         {charts.map((chart) => (
           <div key={chart.id} className="min-h-[280px]">
-            <ChartPane symbol={chart.symbol} timeframe={chart.timeframe} height={height} onSymbolClick={() => setSymbolPicker({ id: chart.id, symbol: chart.symbol })} />
+            <ChartPane
+              symbol={chart.symbol}
+              timeframe={chart.timeframe}
+              height={height}
+              onSymbolClick={() => setSymbolPicker(chart.id)}
+            />
           </div>
         ))}
       </div>
@@ -48,19 +66,21 @@ function ChartContent() {
       {symbolPicker && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => setSymbolPicker(null)}>
           <div className="w-full max-w-sm rounded-lg border border-[#333] bg-[#0a0a0a] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="text-sm font-semibold mb-3">Change symbol</div>
-            <input
-              autoFocus
-              value={symbolPicker.symbol}
-              onChange={(e) => setSymbolPicker({ ...symbolPicker, symbol: e.target.value })}
-              onKeyDown={(e) => { if (e.key === "Enter") chooseSymbol(); }}
-              placeholder="e.g. BTCUSDT"
-              className="w-full rounded border border-[#333] bg-black px-3 py-2 text-white outline-none focus:border-white"
-            />
-            <div className="flex gap-2 mt-3">
-              <button type="button" onClick={chooseSymbol} className="flex-1 rounded bg-white px-3 py-2 text-sm font-semibold text-black">Apply</button>
-              <button type="button" onClick={() => setSymbolPicker(null)} className="rounded border border-[#333] px-3 py-2 text-sm text-[#aaa]">Cancel</button>
+            <div className="text-lg font-semibold mb-1">Select symbol</div>
+            <div className="text-xs text-[#888] mb-4">Tap a symbol to change this chart</div>
+            <div className="grid grid-cols-2 gap-2 max-h-[55vh] overflow-y-auto">
+              {SYMBOLS.map((symbol) => (
+                <button
+                  key={symbol}
+                  type="button"
+                  onClick={() => chooseSymbol(symbol)}
+                  className="rounded border border-[#333] bg-black px-3 py-3 text-sm text-white text-left hover:border-white active:bg-white active:text-black transition-colors"
+                >
+                  {symbol}
+                </button>
+              ))}
             </div>
+            <button type="button" onClick={() => setSymbolPicker(null)} className="w-full mt-3 rounded border border-[#333] px-3 py-2 text-sm text-[#aaa]">Cancel</button>
           </div>
         </div>
       )}
