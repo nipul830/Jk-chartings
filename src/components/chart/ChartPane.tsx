@@ -7,6 +7,7 @@ import { Wrench, Trash2, X } from "lucide-react";
 interface ChartPaneProps { symbol: string; timeframe: string; height?: number; onSymbolClick?: () => void; }
 type Point = { x: number; y: number };
 type Drawing = { tool: string; a: Point; b: Point };
+type EditState = { index: number; mode: "move" | "resizeA" | "resizeB"; start: Point; orig: Drawing };
 
 const intervalMap: Record<string, string> = { "1m":"1m", "5m":"5m", "15m":"15m", "1H":"1h", "4H":"4h", "1D":"1d" };
 const defaultUp="#ffffff", defaultDown="#666666";
@@ -31,7 +32,8 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   const [showTools,setShowTools]=useState(false),[selectedTool,setSelectedTool]=useState<string|null>(null);
   const [showFibSettings,setShowFibSettings]=useState(false),[fibLevels,setFibLevels]=useState<number[]>(getFibLevels());
   const [drawings,setDrawings]=useState<Drawing[]>([]),[draftStart,setDraftStart]=useState<Point|null>(null),[draftEnd,setDraftEnd]=useState<Point|null>(null);
-  const [activeDrawing,setActiveDrawing]=useState<number|null>(null),[moving,setMoving]=useState<{index:number;start:Point;orig:Drawing}|null>(null);
+  const [activeDrawing,setActiveDrawing]=useState<number|null>(null),[editState,setEditState]=useState<EditState|null>(null);
+  const crosshairPoint=useRef<Point|null>(null);
 
   const applyCandleColors=(up:string,down:string)=>{colorsRef.current={up,down};seriesRef.current?.applyOptions({upColor:up,downColor:down,borderUpColor:up,borderDownColor:down,wickUpColor:up,wickDownColor:down});};
 
@@ -46,8 +48,9 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
     const colorChange=()=>{const c=getCandleColors();applyCandleColors(c.up,c.down);};
     const fibChange=()=>setFibLevels(getFibLevels());
     const mo=new MutationObserver(theme);mo.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
-    window.addEventListener(COLOR_EVENT,colorChange);window.addEventListener(FIB_EVENT,fibChange);
     const ro=new ResizeObserver(()=>containerRef.current&&chart.applyOptions({width:Math.max(1,containerRef.current.clientWidth),height}));ro.observe(containerRef.current);
+    chart.subscribeCrosshairMove((param)=>{const el=containerRef.current;if(!el||!param.point)return;const r=el.getBoundingClientRect();crosshairPoint.current={x:Math.max(0,Math.min(r.width,param.point.x)),y:Math.max(0,Math.min(r.height,param.point.y))};});
+    window.addEventListener(COLOR_EVENT,colorChange);window.addEventListener(FIB_EVENT,fibChange);
     return()=>{mo.disconnect();ro.disconnect();window.removeEventListener(COLOR_EVENT,colorChange);window.removeEventListener(FIB_EVENT,fibChange);chart.remove();chartRef.current=null;seriesRef.current=null;};
   },[height]);
 
@@ -59,79 +62,101 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   },[symbol,timeframe]);
 
   const point=(e:{currentTarget:Element;clientX:number;clientY:number}):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:Math.max(0,Math.min(r.width,e.clientX-r.left)),y:Math.max(0,Math.min(r.height,e.clientY-r.top))};};
-  const finish=()=>{setDraftStart(null);setDraftEnd(null);setSelectedTool(null);};
+  const finishPlacement=()=>{setDraftStart(null);setDraftEnd(null);setSelectedTool(null);};
 
-  const onDrawDown=(e:PointerEvent<HTMLDivElement>)=>{
+  const handlePlacementTap=(e:PointerEvent<HTMLDivElement>)=>{
     if(!selectedTool||showTools||showFibSettings)return;
-    e.preventDefault();e.stopPropagation();setActiveDrawing(null);
-    const p=point(e);
-    if(selectedTool==="Horizontal line"||selectedTool==="Vertical line"){
-      setDrawings(d=>[...d,{tool:selectedTool,a:p,b:p}]);finish();return;
-    }
-    setDraftStart(p);setDraftEnd(p);e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    const p=crosshairPoint.current||point(e);
+    if(!draftStart){setActiveDrawing(null);setDraftStart(p);setDraftEnd(p);return;}
+    if(Math.hypot(p.x-draftStart.x,p.y-draftStart.y)<3)return;
+    setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b:p}]);
+    finishPlacement();
   };
-  const onDrawMove=(e:PointerEvent<HTMLDivElement>)=>{if(draftStart)setDraftEnd(point(e));};
-  const onDrawUp=(e:PointerEvent<HTMLDivElement>)=>{if(!draftStart)return;const b=point(e);if(Math.hypot(b.x-draftStart.x,b.y-draftStart.y)>=5)setDrawings(d=>[...d,{tool:selectedTool||"Trend line",a:draftStart,b}]);finish();};
+  const handlePointerMove=(e:PointerEvent<HTMLDivElement>)=>{
+    if(!selectedTool)return;
+    const p=point(e);crosshairPoint.current=p;
+    if(draftStart)setDraftEnd(p);
+  };
 
-  const onSelectDown=(i:number,e:PointerEvent<SVGElement>)=>{
+  const beginEdit=(index:number,mode:"move"|"resizeA"|"resizeB",e:PointerEvent<SVGElement>)=>{
     e.preventDefault();e.stopPropagation();
-    if(selectedTool)return;
-    setActiveDrawing(i);
-    const p=point(e);
-    setMoving({index:i,start:p,orig:{...drawings[i],a:{...drawings[i].a},b:{...drawings[i].b}}});
+    const p=point(e),d=drawings[index];
+    setActiveDrawing(index);
+    setEditState({index,mode,start:p,orig:{...d,a:{...d.a},b:{...d.b}}});
     (e.currentTarget as SVGElement).setPointerCapture?.(e.pointerId);
   };
-  const onSelectMove=(e:PointerEvent<SVGElement>)=>{
-    if(!moving)return;
-    const p=point(e),dx=p.x-moving.start.x,dy=p.y-moving.start.y,o=moving.orig;
-    setDrawings(d=>d.map((x,i)=>i===moving.index?{...x,a:{x:o.a.x+dx,y:o.a.y+dy},b:{x:o.b.x+dx,y:o.b.y+dy}}:x));
+  const editMove=(e:PointerEvent<SVGElement>)=>{
+    if(!editState)return;
+    const p=point(e),dx=p.x-editState.start.x,dy=p.y-editState.start.y,o=editState.orig;
+    setDrawings(d=>d.map((x,i)=>{
+      if(i!==editState.index)return x;
+      if(editState.mode==="resizeA")return {...x,a:{x:o.a.x+dx,y:o.a.y+dy}};
+      if(editState.mode==="resizeB")return {...x,b:{x:o.b.x+dx,y:o.b.y+dy}};
+      return {...x,a:{x:o.a.x+dx,y:o.a.y+dy},b:{x:o.b.x+dx,y:o.b.y+dy}};
+    }));
   };
-  const onSelectUp=()=>setMoving(null);
+  const editUp=()=>setEditState(null);
 
   const shape=(d:Drawing,interactive=false,i=0)=>{
     const {a,b,tool}=d;
-    const hitProps=interactive?{onPointerDown:(e:PointerEvent<SVGElement>)=>onSelectDown(i,e),onPointerMove:onSelectMove,onPointerUp:onSelectUp,onPointerCancel:onSelectUp,style:{pointerEvents:"stroke" as const,cursor:"move"}}:{};
-    if(tool==="Horizontal line")return <line key={`${i}-h`} x1="0" y1={a.y} x2="100%" y2={a.y} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hitProps}/>;
-    if(tool==="Vertical line")return <line key={`${i}-v`} x1={a.x} y1="0" x2={a.x} y2="100%" stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hitProps}/>;
-    if(tool==="Rectangle"){const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);return <rect key={`${i}-r`} x={x} y={y} width={w} height={h} fill="none" stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hitProps}/>;}
+    const hit=(mode:"move"|"resizeA"|"resizeB")=>interactive?{onPointerDown:(e:PointerEvent<SVGElement>)=>beginEdit(i,mode,e),style:{pointerEvents:"stroke" as const,cursor:mode==="move"?"move":"crosshair"}}:{};
+    if(tool==="Horizontal line")return <line key={`${i}-h`} x1="0" y1={a.y} x2="100%" y2={a.y} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hit("resizeA")}/>;
+    if(tool==="Vertical line")return <line key={`${i}-v`} x1={a.x} y1="0" x2={a.x} y2="100%" stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hit("resizeA")}/>;
+    if(tool==="Rectangle"){const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);return <rect key={`${i}-r`} x={x} y={y} width={w} height={h} fill="none" stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hit("move")}/>;}
     if(tool==="Fibonacci Retracement"){
       const ys=fibLevels.map(l=>a.y+(b.y-a.y)*l);
-      if(interactive)return <g key={`${i}-fib`} style={{pointerEvents:"stroke"}}>{ys.map((y,j)=><line key={j} x1="0" y1={y} x2="100%" y2={y} stroke="transparent" strokeWidth="18" {...hitProps}/>)}</g>;
-      return <g key={`${i}-fib-v`}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="currentColor" strokeWidth="1"/>{ys.map((y,j)=><g key={j}><line x1="0" y1={y} x2="100%" y2={y} stroke="currentColor" strokeWidth="1" opacity=".65"/><text x="6" y={y-3} fontSize="10" fill="currentColor">{(fibLevels[j]*100).toFixed(fibLevels[j]%1===0?0:1)}%</text></g>)}</g>;
+      return <g key={`${i}-fib`}>
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1}/>
+        {!interactive&&ys.map((y,j)=><g key={j}><line x1="0" y1={y} x2="100%" y2={y} stroke="currentColor" strokeWidth="1" opacity=".65"/><text x="6" y={y-3} fontSize="10" fill="currentColor">{(fibLevels[j]*100).toFixed(fibLevels[j]%1===0?0:1)}%</text></g>)}
+        {interactive&&<line x1="0" y1={a.y} x2="100%" y2={a.y} stroke="transparent" strokeWidth="18" style={{pointerEvents:"stroke"}} onPointerDown={e=>beginEdit(i,"move",e)}/>} 
+      </g>;
     }
-    if(tool==="Ray"){const vx=b.x-a.x,vy=b.y-a.y,t=Math.max(1,(Math.max(containerRef.current?.clientWidth||1,containerRef.current?.clientHeight||1)*2)/Math.max(Math.abs(vx),Math.abs(vy),1)),ex=a.x+vx*t,ey=a.y+vy*t;return <line key={`${i}-ray`} x1={a.x} y1={a.y} x2={ex} y2={ey} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hitProps}/>;}
-    return <line key={`${i}-line`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hitProps}/>;
+    if(tool==="Ray"){
+      const vx=b.x-a.x,vy=b.y-a.y,t=Math.max(1,(Math.max(containerRef.current?.clientWidth||1,containerRef.current?.clientHeight||1)*2)/Math.max(Math.abs(vx),Math.abs(vy),1)),ex=a.x+vx*t,ey=a.y+vy*t;
+      return <line key={`${i}-ray`} x1={a.x} y1={a.y} x2={ex} y2={ey} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hit("move")}/>;
+    }
+    return <line key={`${i}-line`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={interactive?"transparent":"currentColor"} strokeWidth={interactive?18:1.4} {...hit("move")}/>;
   };
 
   const active=activeDrawing!==null?drawings[activeDrawing]:null;
-  const toolbar=active?{left:Math.min(Math.max(active.b.x,8),(containerRef.current?.clientWidth||300)-150),top:Math.max(8,Math.min(Math.max(active.a.y,active.b.y)+12,(containerRef.current?.clientHeight||300)-48))}:null;
+  const toolbar=active?{left:Math.min(Math.max(active.b.x,8),(containerRef.current?.clientWidth||300)-190),top:Math.max(8,Math.min(Math.max(active.a.y,active.b.y)+14,(containerRef.current?.clientHeight||300)-50))}:null;
   const saveFib=(levels:number[])=>{const clean=levels.map(Number).filter(Number.isFinite).sort((a,b)=>a-b);setFibLevels(clean);try{localStorage.setItem("jk-fib-levels",JSON.stringify(clean));window.dispatchEvent(new Event(FIB_EVENT));}catch{}};
 
-  return <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white" onPointerDown={()=>{if(!selectedTool)setActiveDrawing(null);}}>
+  return <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white" onPointerMove={handlePointerMove}>
     <div className="absolute top-2 left-2 z-40 flex items-center gap-1">
       <button type="button" onClick={e=>{e.stopPropagation();onSymbolClick?.();}} className="text-xs bg-black/70 px-2 py-1 rounded border border-[#333]">{symbol} · {timeframe}</button>
-      <button type="button" onClick={e=>{e.stopPropagation();setShowTools(v=>!v);setActiveDrawing(null);}} className={`w-7 h-7 flex items-center justify-center rounded border ${showTools?"bg-white text-black border-white":"bg-black/70 text-[#aaa] border-[#333]"}`}><Wrench size={14}/></button>
+      <button type="button" onClick={e=>{e.stopPropagation();setShowTools(v=>!v);setActiveDrawing(null);setSelectedTool(null);setDraftStart(null);setDraftEnd(null);}} className={`w-7 h-7 flex items-center justify-center rounded border ${showTools?"bg-white text-black border-white":"bg-black/70 text-[#aaa] border-[#333]"}`}><Wrench size={14}/></button>
     </div>
-    <div ref={containerRef} className="w-full h-full" />
+    <div ref={containerRef} className="w-full h-full" onPointerDown={handlePlacementTap} />
 
     <svg className="absolute inset-0 z-10 w-full h-full pointer-events-none text-white" aria-hidden="true">
       {drawings.map((d,i)=>shape(d,false,i))}
       {draftStart&&draftEnd&&shape({tool:selectedTool||"Trend line",a:draftStart,b:draftEnd},false,9999)}
+      {active&&<g style={{pointerEvents:"auto"}}>
+        {active.tool==="Horizontal line"&&<circle cx={active.a.x} cy={active.a.y} r="7" fill="black" stroke="white" strokeWidth="2" onPointerDown={e=>beginEdit(activeDrawing!,"resizeA",e)}/>} 
+        {active.tool==="Vertical line"&&<circle cx={active.a.x} cy={active.a.y} r="7" fill="black" stroke="white" strokeWidth="2" onPointerDown={e=>beginEdit(activeDrawing!,"resizeA",e)}/>} 
+        {active.tool!=="Horizontal line"&&active.tool!=="Vertical line"&&<>
+          <circle cx={active.a.x} cy={active.a.y} r="7" fill="black" stroke="white" strokeWidth="2" onPointerDown={e=>beginEdit(activeDrawing!,"resizeA",e)}/>
+          <circle cx={active.b.x} cy={active.b.y} r="7" fill="black" stroke="white" strokeWidth="2" onPointerDown={e=>beginEdit(activeDrawing!,"resizeB",e)}/>
+        </>}
+      </g>}
     </svg>
 
-    {!selectedTool&&drawings.length>0&&<svg className="absolute inset-0 z-[18] w-full h-full pointer-events-auto text-white" aria-label="Drawing selection layer" onPointerMove={onSelectMove} onPointerUp={onSelectUp} onPointerCancel={onSelectUp}>
+    {!selectedTool&&drawings.length>0&&<svg className="absolute inset-0 z-[18] w-full h-full pointer-events-none text-white" aria-label="Drawing selection layer" onPointerMove={editMove} onPointerUp={editUp} onPointerCancel={editUp}>
       {drawings.map((d,i)=>shape(d,true,i))}
     </svg>}
 
-    {selectedTool&&<div className="absolute inset-0 z-20 cursor-crosshair touch-none" onPointerDown={onDrawDown} onPointerMove={onDrawMove} onPointerUp={onDrawUp} onPointerCancel={finish}/>} 
+    {selectedTool&&<div className="absolute inset-0 z-20 pointer-events-none cursor-crosshair" />}
 
     {active&&toolbar&&<div className="absolute z-50 flex items-center gap-1 rounded-lg border border-[#333] bg-[#0a0a0a] px-1.5 py-1 shadow-2xl" style={{left:toolbar.left,top:toolbar.top}} onPointerDown={e=>e.stopPropagation()}>
+      <span className="px-1 text-[10px] text-[#888]">Drag handles to resize</span>
       <button type="button" className="rounded px-2 py-1 text-xs text-white hover:bg-[#1a1a1a]" onClick={()=>setActiveDrawing(null)}>Done</button>
       <button type="button" className="flex items-center gap-1 rounded px-2 py-1 text-xs text-red-300 hover:bg-[#1a1a1a]" onClick={()=>{setDrawings(d=>d.filter((_,j)=>j!==activeDrawing));setActiveDrawing(null);}}><Trash2 size={12}/> Remove</button>
       <button type="button" className="rounded p-1 text-[#888] hover:bg-[#1a1a1a]" onClick={()=>setActiveDrawing(null)}><X size={12}/></button>
     </div>}
 
-    {draftStart&&<div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 rounded bg-black/80 border border-[#333] px-2 py-1 text-[11px] text-white pointer-events-none">Drag to place {selectedTool}</div>}
+    {draftStart&&<div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 rounded bg-black/80 border border-[#333] px-2 py-1 text-[11px] text-white pointer-events-none">Crosshair: tap start → move crosshair → tap end</div>}
 
     {showTools&&<div className="absolute top-11 left-2 z-40 w-56 rounded-lg border border-[#333] bg-[#0a0a0a] p-2 shadow-2xl">
       <div className="px-2 py-1 text-xs font-semibold text-[#888]">Drawing tools</div>
