@@ -54,6 +54,7 @@ function ChartContent() {
         {charts.map((chart) => (
           <div key={chart.id} className="min-h-[280px]">
             <ChartPane
+              key={`${chart.id}-${chart.symbol}-${chart.timeframe}`}
               symbol={chart.symbol}
               timeframe={chart.timeframe}
               height={height}
