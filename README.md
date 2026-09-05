@@ -1,65 +1,47 @@
-# Jk-Chartings (MonoTrade)
+# Jk-Chartings
 
-Black & White Trading Chart Analysis Platform
+Black & White Multi-Layout Trading Chart Platform
+
+## Live Demo
+After enabling GitHub Pages:  
+**https://nipul830.github.io/Jk-chartings/**
 
 ## Features
+- Watchlist with live prices (Binance)
+- Symbol Search
+- Multi-layout charts (1 / 2 / 4 / 6 panes)
+- Independent charts (symbol + timeframe)
+- Black & White theme
+- Settings page
+- Technical charts powered by Lightweight Charts
 
-- **Watchlist** with live price & % change (TradingView style)
-- **Symbol Search**
-- **Multi-Layout Charts**: 1 / 2 / 4 / 6 panes
-- Each chart is fully independent (symbol, timeframe, indicators)
-- **Drawing Tools**: Trendline, Horizontal/Vertical line, Fibonacci, Rectangle
-- **Technical Indicators**: SMA, EMA, RSI, MACD, Bollinger Bands, Volume
-- **Settings Page**
-- Pure **Black & White** theme
-- Free **Binance API** (Crypto)
+## Local Development
 
-## Tech Stack
-
-- Next.js 15 (App Router)
-- TypeScript
-- Tailwind CSS
-- TradingView Lightweight Charts
-- Zustand (state management)
-- Lucide React (icons)
-
-## Getting Started
-
-\`\`\`bash
+```bash
 npm install
 npm run dev
-\`\`\`
+```
 
-Open [http://localhost:3000](http://localhost:3000)
+## GitHub Pages Deployment
 
-## Project Structure
+This project is configured for static export.
 
-\`\`\`
-src/
-├── app/
-│   ├── layout.tsx
-│   ├── page.tsx              # Watchlist Home
-│   ├── chart/page.tsx        # Multi-layout Charts
-│   └── settings/page.tsx
-├── components/
-│   ├── layout/
-│   ├── watchlist/
-│   ├── chart/
-│   └── ui/
-├── lib/
-│   ├── api/binance.ts
-│   ├── store/
-│   └── utils.ts
-├── hooks/
-└── types/
-\`\`\`
+1. Go to repository **Settings → Pages**
+2. Source: **Deploy from a branch**
+3. Branch: **main** / **(root)**
+4. Save
+
+Site will be available at:  
+`https://nipul830.github.io/Jk-chartings/`
+
+## Tech Stack
+- Next.js 15 (Static Export)
+- TypeScript
+- Tailwind CSS
+- Lightweight Charts
+- Zustand
+- Binance Public API
 
 ## Notes
-
-- Currently focused on Crypto (Binance free public API)
-- Drawing tools & advanced indicators are implemented in basic form
-- PineScript support is planned for future
-
----
-
-Made for clean, fast chart analysis.
+- Free crypto data from Binance
+- Drawing tools & advanced indicators - coming soon
