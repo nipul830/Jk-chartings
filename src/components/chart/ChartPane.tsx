@@ -59,16 +59,24 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
 
   const pointFromEvent=(e:{currentTarget:Element;clientX:number;clientY:number}):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const isDrawTool=selectedTool!=="Crosshair";
+  const finishTool=()=>{setDraftStart(null);setDraftEnd(null);setSelectedTool("Crosshair");};
 
-  const handlePointerDown=(e:PointerEvent<SVGSVGElement>)=>{
+  const handleToolPointerDown=(e:PointerEvent<HTMLDivElement>)=>{
     if(!isDrawTool||showTools||showFibSettings)return;
     e.preventDefault();
     const p=pointFromEvent(e);
-    if(selectedTool==="Horizontal line"||selectedTool==="Vertical line"){setDrawings(d=>[...d,{tool:selectedTool,a:p,b:p}]);setSelectedTool("Crosshair");return;}
+    if(selectedTool==="Horizontal line"||selectedTool==="Vertical line"){
+      setDrawings(d=>[...d,{tool:selectedTool,a:p,b:p}]);finishTool();return;
+    }
     setDraftStart(p);setDraftEnd(p);e.currentTarget.setPointerCapture?.(e.pointerId);
   };
-  const handlePointerMove=(e:PointerEvent<SVGSVGElement>)=>{if(!draftStart)return;setDraftEnd(pointFromEvent(e));};
-  const handlePointerUp=(e:PointerEvent<SVGSVGElement>)=>{if(!draftStart)return;const b=pointFromEvent(e);const dx=b.x-draftStart.x,dy=b.y-draftStart.y;if(Math.hypot(dx,dy)<5){setDraftStart(null);setDraftEnd(null);return;}setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b}]);setDraftStart(null);setDraftEnd(null);setSelectedTool("Crosshair");};
+  const handleToolPointerMove=(e:PointerEvent<HTMLDivElement>)=>{if(draftStart)setDraftEnd(pointFromEvent(e));};
+  const handleToolPointerUp=(e:PointerEvent<HTMLDivElement>)=>{
+    if(!draftStart)return;
+    const b=pointFromEvent(e),dx=b.x-draftStart.x,dy=b.y-draftStart.y;
+    if(Math.hypot(dx,dy)>=5)setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b}]);
+    finishTool();
+  };
   const cancelDrawing=()=>{setDraftStart(null);setDraftEnd(null);};
 
   const renderDrawing=(d:Drawing,i:number)=>{
@@ -91,10 +99,11 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
     </div>
     <div ref={containerRef} className="w-full h-full" />
 
-    <svg className={`absolute inset-0 w-full h-full ${isDrawTool?"pointer-events-auto touch-none":"pointer-events-none"}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={cancelDrawing}>
+    {isDrawTool && <div className="absolute inset-0 z-20 cursor-crosshair touch-none" onPointerDown={handleToolPointerDown} onPointerMove={handleToolPointerMove} onPointerUp={handleToolPointerUp} onPointerCancel={cancelDrawing} />}
+    <svg className="absolute inset-0 z-10 w-full h-full pointer-events-none" aria-hidden="true">
       {drawings.map(renderDrawing)}{draft&&renderDrawing(draft,9999)}
     </svg>
-    {draftStart&&<div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 rounded bg-black/80 border border-[#333] px-2 py-1 text-[11px] text-white pointer-events-none">Drag to place {selectedTool}</div>}
+    {draftStart&&<div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 rounded bg-black/80 border border-[#333] px-2 py-1 text-[11px] text-white pointer-events-none">Drag to place {selectedTool}</div>}
 
     {showTools&&<div className="absolute top-11 left-2 z-40 w-56 rounded-lg border border-[#333] bg-[#0a0a0a] p-2 shadow-2xl"><div className="px-2 py-1 text-xs font-semibold text-[#888]">Drawing tools</div>{TOOLS.map(t=><button key={t} type="button" onClick={()=>{setSelectedTool(t);setShowTools(false);cancelDrawing();}} className="w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-[#1a1a1a]">{t}</button>)}<button type="button" onClick={()=>{setShowFibSettings(true);setShowTools(false);}} className="w-full rounded px-2 py-2 text-left text-sm text-[#aaa]">Fibonacci Settings</button><button type="button" onClick={()=>setDrawings([])} className="w-full mt-1 rounded px-2 py-2 text-left text-sm text-[#aaa]">Clear drawings</button></div>}
     {showFibSettings&&<div className="absolute top-11 left-2 z-50 w-64 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 shadow-2xl"><div className="text-sm font-semibold text-white mb-2">Fibonacci Settings</div><div className="max-h-52 overflow-y-auto space-y-2">{fibLevels.map((l,i)=><div key={`${i}-${l}`} className="flex gap-2 items-center"><span className="text-xs text-[#aaa] w-5">{i+1}</span><input type="number" step="0.001" value={l} onChange={e=>{const n=[...fibLevels];n[i]=Number(e.target.value);setFibLevels(n);}} className="w-full rounded border border-[#333] bg-black px-2 py-1.5 text-sm text-white"/><button type="button" onClick={()=>setFibLevels(fibLevels.filter((_,j)=>j!==i))} className="text-[#888]">×</button></div>)}</div><div className="flex gap-2 mt-3"><button type="button" onClick={()=>setFibLevels([...fibLevels,1.618])} className="flex-1 rounded border border-[#333] px-2 py-2 text-xs text-white">+ 1.618</button><button type="button" onClick={()=>saveFibLevels(fibLevels)} className="flex-1 rounded bg-white px-2 py-2 text-xs text-black">Save</button></div><button type="button" onClick={()=>{setFibLevels(DEFAULT_FIB_LEVELS);saveFibLevels(DEFAULT_FIB_LEVELS);}} className="w-full mt-2 rounded border border-[#333] px-2 py-2 text-xs text-[#aaa]">Reset defaults</button><button type="button" onClick={()=>setShowFibSettings(false)} className="w-full mt-2 rounded border border-[#333] px-2 py-2 text-xs text-[#aaa]">Done</button></div>}
