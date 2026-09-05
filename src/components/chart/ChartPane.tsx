@@ -26,40 +26,72 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const isLight = document.documentElement.classList.contains("light");
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height,
       layout: {
-        background: { color: "#000000" },
-        textColor: "#ffffff",
+        background: { color: isLight ? "#ffffff" : "#000000" },
+        textColor: isLight ? "#111111" : "#ffffff",
       },
       grid: {
-        vertLines: { color: "#1a1a1a" },
-        horzLines: { color: "#1a1a1a" },
+        vertLines: { color: isLight ? "#e5e5e5" : "#1a1a1a" },
+        horzLines: { color: isLight ? "#e5e5e5" : "#1a1a1a" },
       },
       crosshair: {
         mode: 0,
       },
       rightPriceScale: {
-        borderColor: "#222",
+        borderColor: isLight ? "#d0d0d0" : "#222222",
       },
       timeScale: {
-        borderColor: "#222",
+        borderColor: isLight ? "#d0d0d0" : "#222222",
         timeVisible: true,
       },
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#ffffff",
-      downColor: "#666666",
-      borderUpColor: "#ffffff",
-      borderDownColor: "#666666",
-      wickUpColor: "#ffffff",
-      wickDownColor: "#666666",
+      upColor: isLight ? "#111111" : "#ffffff",
+      downColor: isLight ? "#888888" : "#666666",
+      borderUpColor: isLight ? "#111111" : "#ffffff",
+      borderDownColor: isLight ? "#888888" : "#666666",
+      wickUpColor: isLight ? "#111111" : "#ffffff",
+      wickDownColor: isLight ? "#888888" : "#666666",
     });
 
     chartRef.current = chart;
     seriesRef.current = candleSeries;
+
+    const updateTheme = () => {
+      const light = document.documentElement.classList.contains("light");
+      chart.applyOptions({
+        layout: {
+          background: { color: light ? "#ffffff" : "#000000" },
+          textColor: light ? "#111111" : "#ffffff",
+        },
+        grid: {
+          vertLines: { color: light ? "#e5e5e5" : "#1a1a1a" },
+          horzLines: { color: light ? "#e5e5e5" : "#1a1a1a" },
+        },
+        rightPriceScale: {
+          borderColor: light ? "#d0d0d0" : "#222222",
+        },
+        timeScale: {
+          borderColor: light ? "#d0d0d0" : "#222222",
+        },
+      });
+      candleSeries.applyOptions({
+        upColor: light ? "#111111" : "#ffffff",
+        downColor: light ? "#888888" : "#666666",
+        borderUpColor: light ? "#111111" : "#ffffff",
+        borderDownColor: light ? "#888888" : "#666666",
+        wickUpColor: light ? "#111111" : "#ffffff",
+        wickDownColor: light ? "#888888" : "#666666",
+      });
+    };
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     const handleResize = () => {
       if (containerRef.current) {
@@ -69,6 +101,7 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
     window.addEventListener("resize", handleResize);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
@@ -101,7 +134,7 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
   }, [symbol, timeframe]);
 
   return (
-    <div className="w-full h-full relative border border-[#1a1a1a] bg-black">
+    <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white">
       <div className="absolute top-2 left-2 z-10 text-xs bg-black/70 px-2 py-1 rounded border border-[#333]">
         {symbol} · {timeframe}
       </div>
