@@ -33,7 +33,7 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   const [showFibSettings,setShowFibSettings]=useState(false),[fibLevels,setFibLevels]=useState<number[]>(getFibLevels());
   const [drawings,setDrawings]=useState<Drawing[]>([]),[draftStart,setDraftStart]=useState<Point|null>(null),[draftEnd,setDraftEnd]=useState<Point|null>(null);
   const [activeDrawing,setActiveDrawing]=useState<number|null>(null),[editState,setEditState]=useState<EditState|null>(null);
-  const crosshairPoint=useRef<Point|null>(null);
+  const [cursorPoint,setCursorPoint]=useState<Point|null>(null);
 
   const applyCandleColors=(up:string,down:string)=>{colorsRef.current={up,down};seriesRef.current?.applyOptions({upColor:up,downColor:down,borderUpColor:up,borderDownColor:down,wickUpColor:up,wickDownColor:down});};
 
@@ -49,7 +49,6 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
     const fibChange=()=>setFibLevels(getFibLevels());
     const mo=new MutationObserver(theme);mo.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
     const ro=new ResizeObserver(()=>containerRef.current&&chart.applyOptions({width:Math.max(1,containerRef.current.clientWidth),height}));ro.observe(containerRef.current);
-    chart.subscribeCrosshairMove((param)=>{const el=containerRef.current;if(!el||!param.point)return;const r=el.getBoundingClientRect();crosshairPoint.current={x:Math.max(0,Math.min(r.width,param.point.x)),y:Math.max(0,Math.min(r.height,param.point.y))};});
     window.addEventListener(COLOR_EVENT,colorChange);window.addEventListener(FIB_EVENT,fibChange);
     return()=>{mo.disconnect();ro.disconnect();window.removeEventListener(COLOR_EVENT,colorChange);window.removeEventListener(FIB_EVENT,fibChange);chart.remove();chartRef.current=null;seriesRef.current=null;};
   },[height]);
@@ -62,28 +61,39 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   },[symbol,timeframe]);
 
   const point=(e:{currentTarget:Element;clientX:number;clientY:number}):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:Math.max(0,Math.min(r.width,e.clientX-r.left)),y:Math.max(0,Math.min(r.height,e.clientY-r.top))};};
-  const finishPlacement=()=>{setDraftStart(null);setDraftEnd(null);setSelectedTool(null);};
+  const finishPlacement=()=>{setDraftStart(null);setDraftEnd(null);setSelectedTool(null);setCursorPoint(null);};
 
-  const handlePlacementTap=(e:PointerEvent<HTMLDivElement>)=>{
-    if(!selectedTool||showTools||showFibSettings)return;
-    e.preventDefault();
-    const p=crosshairPoint.current||point(e);
-    if(!draftStart){setActiveDrawing(null);setDraftStart(p);setDraftEnd(p);return;}
-    if(Math.hypot(p.x-draftStart.x,p.y-draftStart.y)<3)return;
-    setDrawings(d=>[...d,{tool:selectedTool,a:draftStart,b:p}]);
-    finishPlacement();
-  };
+  useEffect(()=>{
+    if(!selectedTool)return;
+    const el=containerRef.current;
+    if(!el)return;
+    const w=el.clientWidth,h=el.clientHeight;
+    setCursorPoint(p=>p||{x:w/2,y:h/2});
+    chartRef.current?.applyOptions({handleScroll:false,handleScale:false,crosshair:{mode:0}});
+    return()=>{chartRef.current?.applyOptions({handleScroll:true,handleScale:true,crosshair:{mode:0}});};
+  },[selectedTool]);
+
   const handlePointerMove=(e:PointerEvent<HTMLDivElement>)=>{
     if(!selectedTool)return;
-    const p=point(e);crosshairPoint.current=p;
+    const p=point(e);setCursorPoint(p);
     if(draftStart)setDraftEnd(p);
+  };
+  const handlePlacementTap=(e:PointerEvent<HTMLDivElement>)=>{
+    if(!selectedTool||showTools||showFibSettings)return;
+    e.preventDefault();e.stopPropagation();
+    const p=point(e);setCursorPoint(p);
+    if(!draftStart){setActiveDrawing(null);setDraftStart(p);setDraftEnd(p);return;}
+    if(Math.hypot(p.x-draftStart.x,p.y-draftStart.y)<3)return;
+    const tool=selectedTool;
+    const start=draftStart;
+    setDrawings(d=>[...d,{tool,a:start,b:p}]);
+    finishPlacement();
   };
 
   const beginEdit=(index:number,mode:"move"|"resizeA"|"resizeB",e:PointerEvent<SVGElement>)=>{
     e.preventDefault();e.stopPropagation();
     const p=point(e),d=drawings[index];
-    setActiveDrawing(index);
-    setEditState({index,mode,start:p,orig:{...d,a:{...d.a},b:{...d.b}}});
+    setActiveDrawing(index);setEditState({index,mode,start:p,orig:{...d,a:{...d.a},b:{...d.b}}});
     (e.currentTarget as SVGElement).setPointerCapture?.(e.pointerId);
   };
   const editMove=(e:PointerEvent<SVGElement>)=>{
@@ -123,12 +133,18 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
   const toolbar=active?{left:Math.min(Math.max(active.b.x,8),(containerRef.current?.clientWidth||300)-190),top:Math.max(8,Math.min(Math.max(active.a.y,active.b.y)+14,(containerRef.current?.clientHeight||300)-50))}:null;
   const saveFib=(levels:number[])=>{const clean=levels.map(Number).filter(Number.isFinite).sort((a,b)=>a-b);setFibLevels(clean);try{localStorage.setItem("jk-fib-levels",JSON.stringify(clean));window.dispatchEvent(new Event(FIB_EVENT));}catch{}};
 
-  return <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white" onPointerMove={handlePointerMove}>
+  return <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white" onPointerMove={handlePointerMove} onPointerDown={handlePlacementTap}>
     <div className="absolute top-2 left-2 z-40 flex items-center gap-1">
       <button type="button" onClick={e=>{e.stopPropagation();onSymbolClick?.();}} className="text-xs bg-black/70 px-2 py-1 rounded border border-[#333]">{symbol} · {timeframe}</button>
-      <button type="button" onClick={e=>{e.stopPropagation();setShowTools(v=>!v);setActiveDrawing(null);setSelectedTool(null);setDraftStart(null);setDraftEnd(null);}} className={`w-7 h-7 flex items-center justify-center rounded border ${showTools?"bg-white text-black border-white":"bg-black/70 text-[#aaa] border-[#333]"}`}><Wrench size={14}/></button>
+      <button type="button" onClick={e=>{e.stopPropagation();setShowTools(v=>!v);setActiveDrawing(null);setSelectedTool(null);setDraftStart(null);setDraftEnd(null);setCursorPoint(null);}} className={`w-7 h-7 flex items-center justify-center rounded border ${showTools?"bg-white text-black border-white":"bg-black/70 text-[#aaa] border-[#333]"}`}><Wrench size={14}/></button>
     </div>
-    <div ref={containerRef} className="w-full h-full" onPointerDown={handlePlacementTap} />
+    <div ref={containerRef} className="w-full h-full" />
+
+    {selectedTool&&cursorPoint&&<div className="absolute inset-0 z-20 pointer-events-none" aria-hidden="true">
+      <div className="absolute top-0 bottom-0 w-px bg-white/70" style={{left:cursorPoint.x}} />
+      <div className="absolute left-0 right-0 h-px bg-white/70" style={{top:cursorPoint.y}} />
+      <div className="absolute w-3 h-3 rounded-full border-2 border-white bg-black -translate-x-1/2 -translate-y-1/2" style={{left:cursorPoint.x,top:cursorPoint.y}} />
+    </div>}
 
     <svg className="absolute inset-0 z-10 w-full h-full pointer-events-none text-white" aria-hidden="true">
       {drawings.map((d,i)=>shape(d,false,i))}
@@ -147,8 +163,6 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
       {drawings.map((d,i)=>shape(d,true,i))}
     </svg>}
 
-    {selectedTool&&<div className="absolute inset-0 z-20 pointer-events-none cursor-crosshair" />}
-
     {active&&toolbar&&<div className="absolute z-50 flex items-center gap-1 rounded-lg border border-[#333] bg-[#0a0a0a] px-1.5 py-1 shadow-2xl" style={{left:toolbar.left,top:toolbar.top}} onPointerDown={e=>e.stopPropagation()}>
       <span className="px-1 text-[10px] text-[#888]">Drag handles to resize</span>
       <button type="button" className="rounded px-2 py-1 text-xs text-white hover:bg-[#1a1a1a]" onClick={()=>setActiveDrawing(null)}>Done</button>
@@ -160,7 +174,7 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
 
     {showTools&&<div className="absolute top-11 left-2 z-40 w-56 rounded-lg border border-[#333] bg-[#0a0a0a] p-2 shadow-2xl">
       <div className="px-2 py-1 text-xs font-semibold text-[#888]">Drawing tools</div>
-      {TOOLS.map(t=><button key={t} type="button" onClick={()=>{setShowTools(false);setActiveDrawing(null);setDraftStart(null);setDraftEnd(null);setSelectedTool(t);}} className="w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-[#1a1a1a]">{t}</button>)}
+      {TOOLS.map(t=><button key={t} type="button" onClick={()=>{setShowTools(false);setActiveDrawing(null);setDraftStart(null);setDraftEnd(null);setCursorPoint(null);setSelectedTool(t);}} className="w-full rounded px-2 py-2 text-left text-sm text-white hover:bg-[#1a1a1a]">{t}</button>)}
       <button type="button" onClick={()=>{setShowFibSettings(true);setShowTools(false);}} className="w-full rounded px-2 py-2 text-left text-sm text-[#aaa]">Fibonacci Settings</button>
       <button type="button" onClick={()=>{setDrawings([]);setActiveDrawing(null);}} className="w-full mt-1 rounded px-2 py-2 text-left text-sm text-[#aaa]">Clear drawings</button>
     </div>}
