@@ -7,6 +7,7 @@ interface ChartPaneProps {
   symbol: string;
   timeframe: string;
   height?: number;
+  onSymbolClick?: () => void;
 }
 
 const intervalMap: Record<string, string> = {
@@ -18,7 +19,7 @@ const intervalMap: Record<string, string> = {
   "1D": "1d",
 };
 
-export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
+export function ChartPane({ symbol, timeframe, height = 400, onSymbolClick }: ChartPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -38,16 +39,9 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
         vertLines: { color: isLight ? "#e5e5e5" : "#1a1a1a" },
         horzLines: { color: isLight ? "#e5e5e5" : "#1a1a1a" },
       },
-      crosshair: {
-        mode: 0,
-      },
-      rightPriceScale: {
-        borderColor: isLight ? "#d0d0d0" : "#222222",
-      },
-      timeScale: {
-        borderColor: isLight ? "#d0d0d0" : "#222222",
-        timeVisible: true,
-      },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderColor: isLight ? "#d0d0d0" : "#222222" },
+      timeScale: { borderColor: isLight ? "#d0d0d0" : "#222222", timeVisible: true },
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -65,28 +59,15 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
     const updateTheme = () => {
       const light = document.documentElement.classList.contains("light");
       chart.applyOptions({
-        layout: {
-          background: { color: light ? "#ffffff" : "#000000" },
-          textColor: light ? "#111111" : "#ffffff",
-        },
-        grid: {
-          vertLines: { color: light ? "#e5e5e5" : "#1a1a1a" },
-          horzLines: { color: light ? "#e5e5e5" : "#1a1a1a" },
-        },
-        rightPriceScale: {
-          borderColor: light ? "#d0d0d0" : "#222222",
-        },
-        timeScale: {
-          borderColor: light ? "#d0d0d0" : "#222222",
-        },
+        layout: { background: { color: light ? "#ffffff" : "#000000" }, textColor: light ? "#111111" : "#ffffff" },
+        grid: { vertLines: { color: light ? "#e5e5e5" : "#1a1a1a" }, horzLines: { color: light ? "#e5e5e5" : "#1a1a1a" } },
+        rightPriceScale: { borderColor: light ? "#d0d0d0" : "#222222" },
+        timeScale: { borderColor: light ? "#d0d0d0" : "#222222" },
       });
       candleSeries.applyOptions({
-        upColor: light ? "#111111" : "#ffffff",
-        downColor: light ? "#888888" : "#666666",
-        borderUpColor: light ? "#111111" : "#ffffff",
-        borderDownColor: light ? "#888888" : "#666666",
-        wickUpColor: light ? "#111111" : "#ffffff",
-        wickDownColor: light ? "#888888" : "#666666",
+        upColor: light ? "#111111" : "#ffffff", downColor: light ? "#888888" : "#666666",
+        borderUpColor: light ? "#111111" : "#ffffff", borderDownColor: light ? "#888888" : "#666666",
+        wickUpColor: light ? "#111111" : "#ffffff", wickDownColor: light ? "#888888" : "#666666",
       });
     };
 
@@ -94,9 +75,7 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
-      }
+      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
     };
     window.addEventListener("resize", handleResize);
 
@@ -112,32 +91,29 @@ export function ChartPane({ symbol, timeframe, height = 400 }: ChartPaneProps) {
       if (!seriesRef.current) return;
       try {
         const interval = intervalMap[timeframe] || "15m";
-        const res = await fetch(
-          `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=300`
-        );
+        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=300`);
         const raw = await res.json();
         const data: CandlestickData[] = raw.map((k: any) => ({
           time: Math.floor(k[0] / 1000) as any,
-          open: parseFloat(k[1]),
-          high: parseFloat(k[2]),
-          low: parseFloat(k[3]),
-          close: parseFloat(k[4]),
+          open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]),
         }));
         seriesRef.current.setData(data);
         chartRef.current?.timeScale().fitContent();
-      } catch (e) {
-        console.error("Failed to load klines", e);
-      }
+      } catch (e) { console.error("Failed to load klines", e); }
     };
-
     loadData();
   }, [symbol, timeframe]);
 
   return (
     <div className="w-full h-full relative border border-[#1a1a1a] bg-black light:bg-white">
-      <div className="absolute top-2 left-2 z-10 text-xs bg-black/70 px-2 py-1 rounded border border-[#333]">
+      <button
+        type="button"
+        onClick={onSymbolClick}
+        className="absolute top-2 left-2 z-10 text-xs bg-black/70 px-2 py-1 rounded border border-[#333] hover:border-white transition-colors"
+        title="Change symbol"
+      >
         {symbol} · {timeframe}
-      </div>
+      </button>
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );
