@@ -47,7 +47,7 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
     const mo=new MutationObserver(theme);mo.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
     window.addEventListener(COLOR_EVENT,colorChange);window.addEventListener(FIB_EVENT,fibChange);
     const ro=new ResizeObserver(()=>containerRef.current&&chart.applyOptions({width:Math.max(1,containerRef.current.clientWidth),height}));ro.observe(containerRef.current);
-    return()=>{mo.disconnect();ro.disconnect();window.removeEventListener(COLOR_EVENT,colorChange);window.removeEventListener(FIB_EVENT,fibChange);chart.clearCrosshairPosition();chart.remove();chartRef.current=null;seriesRef.current=null;};
+    return()=>{mo.disconnect();ro.disconnect();window.removeEventListener(COLOR_EVENT,colorChange);window.removeEventListener(FIB_EVENT,fibChange);chart.remove();chartRef.current=null;seriesRef.current=null;};
   },[height]);
 
   useEffect(()=>{
@@ -59,15 +59,6 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
 
   const pointFromEvent=(e:{currentTarget:Element;clientX:number;clientY:number}):Point=>{const r=e.currentTarget.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const isDrawTool=selectedTool!=="Crosshair";
-
-  const updateCrosshair=(e:PointerEvent<HTMLDivElement>)=>{
-    const chart=chartRef.current,series=seriesRef.current;if(!chart||!series)return;
-    const p=pointFromEvent(e);
-    const time=chart.timeScale().coordinateToTime(p.x);
-    const price=series.coordinateToPrice(p.y);
-    if(time!==null&&price!==null)chart.setCrosshairPosition(price,time,series);
-  };
-  // Crosshair stays at the last touched position; it is not a drawing tool.
 
   const handlePointerDown=(e:PointerEvent<SVGSVGElement>)=>{
     if(!isDrawTool||showTools||showFibSettings)return;
@@ -99,8 +90,6 @@ export function ChartPane({symbol,timeframe,height=400,onSymbolClick}:ChartPaneP
       <button type="button" onClick={e=>{e.stopPropagation();setShowTools(v=>!v);}} className={`w-7 h-7 flex items-center justify-center rounded border ${showTools?"bg-white text-black border-white":"bg-black/70 text-[#aaa] border-[#333]"}`}><Wrench size={14}/></button>
     </div>
     <div ref={containerRef} className="w-full h-full" />
-
-    <div className="absolute inset-0 z-20 cursor-crosshair touch-none" onPointerDown={e=>{updateCrosshair(e);e.currentTarget.setPointerCapture?.(e.pointerId);}} onPointerMove={updateCrosshair} onPointerUp={updateCrosshair}/>
 
     <svg className={`absolute inset-0 w-full h-full ${isDrawTool?"pointer-events-auto touch-none":"pointer-events-none"}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={cancelDrawing}>
       {drawings.map(renderDrawing)}{draft&&renderDrawing(draft,9999)}
