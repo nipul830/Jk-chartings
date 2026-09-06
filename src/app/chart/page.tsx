@@ -6,11 +6,13 @@ import { Maximize2, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import { useChartStore } from "@/lib/store/useChartStore";
 import { ChartPane } from "@/components/chart/ChartPane";
 import { LayoutSelector } from "@/components/chart/LayoutSelector";
+import { PineEditor } from "@/components/chart/PineEditor";
 
 const SYMBOLS=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","LTCUSDT","TRXUSDT","DOTUSDT"];
 function ChartContent(){
  const searchParams=useSearchParams();const symbolFromUrl=searchParams.get("symbol");const{layout,charts,setLayout,setChartSymbol,updateChart}=useChartStore();const[symbolPicker,setSymbolPicker]=useState<string|null>(null);const[active,setActive]=useState(0);
  useEffect(()=>{if(symbolFromUrl&&charts[0])setChartSymbol(charts[0].id,symbolFromUrl)},[symbolFromUrl]);
+ useEffect(()=>{const closeSymbolPicker=()=>setSymbolPicker(null);window.addEventListener("jk-pine-opened",closeSymbolPicker);return()=>window.removeEventListener("jk-pine-opened",closeSymbolPicker)},[]);
  const activeChart=charts[active]||charts[0];
  const gridClass=layout===1?"grid-cols-1 grid-rows-1":layout===2?"grid-cols-1 md:grid-cols-2 grid-rows-1":layout===4?"grid-cols-1 md:grid-cols-2 grid-rows-2":"grid-cols-1 md:grid-cols-2 lg:grid-cols-3 grid-rows-2";
  const chartHeight=layout===1?600:layout===2?560:280;
@@ -19,6 +21,7 @@ function ChartContent(){
    <button type="button" onClick={()=>activeChart&&setSymbolPicker(activeChart.id)} className="h-9 px-3 rounded-md border border-[#333] bg-[#0d0d0d] text-sm font-medium text-white hover:border-white">{activeChart?.symbol||"BTCUSDT"} ▾</button>
    <div className="h-6 w-px bg-[#333]"/><LayoutSelector value={layout} onChange={setLayout}/>
    <button type="button" title="Chart settings" className="h-9 w-9 rounded-md border border-[#333] text-[#aaa] flex items-center justify-center hover:text-white hover:border-white"><SlidersHorizontal size={16}/></button>
+   <PineEditor />
    <button type="button" title="Fullscreen" onClick={()=>document.documentElement.requestFullscreen?.().catch(()=>{})} className="h-9 w-9 rounded-md border border-[#333] text-[#aaa] flex items-center justify-center hover:text-white hover:border-white"><Maximize2 size={16}/></button>
    <button type="button" title="More" className="h-9 w-9 rounded-md border border-[#333] text-[#aaa] flex items-center justify-center hover:text-white hover:border-white"><MoreHorizontal size={17}/></button>
   </div></div>
