@@ -1,0 +1,5 @@
+"use client";
+import {useState} from "react";
+interface Props{onClose:()=>void;onAdd:(name:string)=>void}
+const INDICATORS=["Moving Average","EMA","SMA","Bollinger Bands","VWAP","RSI","MACD","Stochastic","ATR","ADX","CCI","Williams %R","Volume","Volume Profile"];
+export function IndicatorPanel({onClose,onAdd}:Props){const[q,setQ]=useState("");const list=INDICATORS.filter(x=>x.toLowerCase().includes(q.toLowerCase()));return <div className="absolute left-0 top-full mt-2 z-[100] w-64 rounded-lg border border-[#333] bg-[#0a0a0a] p-2 shadow-2xl"><div className="flex items-center gap-2 p-1"><input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Search indicator..." className="w-full rounded border border-[#333] bg-black px-2 py-1.5 text-xs text-white outline-none"/><button onClick={onClose} className="text-[#888]">×</button></div><div className="mt-1 max-h-64 overflow-y-auto">{list.map(x=><button key={x} onClick={()=>onAdd(x)} className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-[#1a1a1a]">{x}</button>)}{!list.length&&<div className="p-3 text-xs text-[#666]">No indicator found</div>}</div></div>}
