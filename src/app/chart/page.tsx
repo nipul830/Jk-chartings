@@ -8,7 +8,7 @@ import { ChartPane } from "@/components/chart/ChartPane";
 import { LayoutSelector } from "@/components/chart/LayoutSelector";
 import { PineEditor } from "@/components/chart/PineEditor";
 
-const SYMBOLS=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","LTCUSDT","TRXUSDT","DOTUSDT","XAUUSD"];
+const SYMBOLS=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","LTCUSDT","TRXUSDT","DOTUSDT","XAUUSD","EURUSD","GBPUSD","USDJPY","USDCHF","USDCAD","AUDUSD","NZDUSD"];
 function ChartContent(){
  const searchParams=useSearchParams();const symbolFromUrl=searchParams.get("symbol");const{layout,charts,setLayout,setChartSymbol,updateChart}=useChartStore();const[symbolPicker,setSymbolPicker]=useState<string|null>(null);const[active,setActive]=useState(0);
  useEffect(()=>{if(symbolFromUrl&&charts[0])setChartSymbol(charts[0].id,symbolFromUrl)},[symbolFromUrl]);
