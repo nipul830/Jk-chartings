@@ -6,7 +6,6 @@ import { Maximize2, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import { useChartStore } from "@/lib/store/useChartStore";
 import { ChartPane } from "@/components/chart/ChartPane";
 import { LayoutSelector } from "@/components/chart/LayoutSelector";
-import { IndicatorMenu } from "@/components/chart/IndicatorMenu";
 
 const SYMBOLS=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","LTCUSDT","TRXUSDT","DOTUSDT"];
 function ChartContent(){
@@ -18,7 +17,7 @@ function ChartContent(){
  return <div className="h-[calc(100vh-56px)] min-h-0 flex flex-col bg-black overflow-hidden">
   <div className="border-b border-[#222] bg-[#080808] shrink-0"><div className="flex items-center gap-2 px-2 py-2 overflow-x-auto whitespace-nowrap">
    <button type="button" onClick={()=>activeChart&&setSymbolPicker(activeChart.id)} className="h-9 px-3 rounded-md border border-[#333] bg-[#0d0d0d] text-sm font-medium text-white hover:border-white">{activeChart?.symbol||"BTCUSDT"} ▾</button>
-   <IndicatorMenu/><div className="h-6 w-px bg-[#333]"/><LayoutSelector value={layout} onChange={setLayout}/>
+   <div className="h-6 w-px bg-[#333]"/><LayoutSelector value={layout} onChange={setLayout}/>
    <button type="button" title="Chart settings" className="h-9 w-9 rounded-md border border-[#333] text-[#aaa] flex items-center justify-center hover:text-white hover:border-white"><SlidersHorizontal size={16}/></button>
    <button type="button" title="Fullscreen" onClick={()=>document.documentElement.requestFullscreen?.().catch(()=>{})} className="h-9 w-9 rounded-md border border-[#333] text-[#aaa] flex items-center justify-center hover:text-white hover:border-white"><Maximize2 size={16}/></button>
    <button type="button" title="More" className="h-9 w-9 rounded-md border border-[#333] text-[#aaa] flex items-center justify-center hover:text-white hover:border-white"><MoreHorizontal size={17}/></button>
