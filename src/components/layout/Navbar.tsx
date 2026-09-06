@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, List, Settings, Search, Sun, Moon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PineEditor } from "@/components/chart/PineEditor";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -48,6 +49,7 @@ export function Navbar() {
             </Link>
           );
         })}
+        <PineEditor />
       </div>
       <div className="ml-auto flex items-center gap-2">
         <button type="button" onClick={toggleTheme} aria-label={dark ? "Switch to day mode" : "Switch to night mode"} title={dark ? "Day mode" : "Night mode"} className="w-9 h-9 flex items-center justify-center text-[#aaa] hover:text-white border border-[#333] rounded hover:border-white transition-colors">
