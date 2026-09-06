@@ -27,6 +27,11 @@ export function PineEditor() {
     } catch {}
   }, []);
 
+  const openEditor = () => {
+    window.dispatchEvent(new Event("jk-pine-opened"));
+    setOpen(true);
+  };
+
   const save = () => {
     const item: Script = { id: crypto.randomUUID(), name: name.trim() || "Custom Pine", code };
     const next = [...scripts.filter(s => s.name !== item.name), item];
@@ -61,12 +66,12 @@ export function PineEditor() {
   };
 
   return <>
-    <button type="button" title="Pine Editor" onClick={() => setOpen(true)} className="h-9 px-3 rounded-md border border-[#333] bg-[#0d0d0d] text-[#aaa] flex items-center gap-2 text-sm hover:text-white hover:border-white">
+    <button type="button" title="Pine Editor" onClick={openEditor} className="h-9 px-3 rounded-md border border-[#333] bg-[#0d0d0d] text-[#aaa] flex items-center gap-2 text-sm hover:text-white hover:border-white">
       <Code2 size={16} /> <span className="hidden sm:inline">Pine</span>
     </button>
 
-    {open && <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-3 sm:p-6" onClick={() => setOpen(false)}>
-      <div className="w-full max-w-6xl h-[90vh] rounded-xl border border-[#333] bg-[#080808] shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+    {open && <div className="fixed inset-0 z-[9999] bg-black/85 flex items-center justify-center p-3 sm:p-6" onClick={() => setOpen(false)} onPointerDown={e => e.stopPropagation()}>
+      <div className="w-full max-w-6xl h-[90vh] rounded-xl border border-[#333] bg-[#080808] shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
         <div className="h-12 shrink-0 border-b border-[#222] flex items-center gap-2 px-3">
           <Code2 size={18} className="text-white" />
           <span className="font-semibold text-sm">Pine Editor</span>
