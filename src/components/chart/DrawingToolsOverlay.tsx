@@ -1,127 +1,34 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent, MutableRefObject } from "react";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 
 type Point = { x: number; y: number; time?: number; price?: number };
 type Drawing = { id: string; tool: string; points: Point[]; color: string; width: number; text?: string };
+type Props = { chart: MutableRefObject<IChartApi | null>; series: MutableRefObject<ISeriesApi<"Candlestick"> | null>; height: number };
 
-type Props = {
-  chart: React.MutableRefObject<IChartApi | null>;
-  series: React.MutableRefObject<ISeriesApi<"Candlestick"> | null>;
-  height: number;
-};
+const QUICK_TOOLS = [["Crosshair","cross"],["Trend line","trend"],["Ray","ray"],["Horizontal line","hline"],["Vertical line","vline"],["Fibonacci retracement","fib"],["Rectangle","rect"],["Circle","circle"],["Arrow","arrow"],["Brush","brush"],["Text","text"],["Measure","measure"]] as const;
+const uid=()=>`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 
-const QUICK_TOOLS = [
-  ["Crosshair", "cross"], ["Trend line", "trend"], ["Ray", "ray"],
-  ["Horizontal line", "hline"], ["Vertical line", "vline"],
-  ["Fibonacci retracement", "fib"], ["Rectangle", "rect"], ["Circle", "circle"],
-  ["Arrow", "arrow"], ["Brush", "brush"], ["Text", "text"], ["Measure", "measure"],
-] as const;
-
-const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-export function DrawingToolsOverlay({ chart, series, height }: Props) {
-  const host = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState("cross");
-  const [drawings, setDrawings] = useState<Drawing[]>([]);
-  const [draft, setDraft] = useState<Point[]>([]);
-  const [cursor, setCursor] = useState<Point | null>(null);
-  const [color, setColor] = useState("#f5f5f5");
-  const [width, setWidth] = useState(2);
-  const drawing = active !== "cross";
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("jk-drawings") || "[]");
-      if (Array.isArray(saved)) setDrawings(saved);
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem("jk-drawings", JSON.stringify(drawings)); } catch {}
-  }, [drawings]);
-
-  const toPoint = (e: React.PointerEvent): Point | null => {
-    const r = host.current?.getBoundingClientRect();
-    const c = chart.current;
-    const s = series.current;
-    if (!r || !c || !s) return null;
-    const x = Math.max(0, Math.min(r.width, e.clientX - r.left));
-    const y = Math.max(0, Math.min(r.height, e.clientY - r.top));
-    const t = c.timeScale().coordinateToTime(x);
-    const p = s.coordinateToPrice(y);
-    return { x, y, time: typeof t === "number" ? t : undefined, price: p === null ? undefined : p };
-  };
-
-  const finish = (points: Point[]) => {
-    const needed = active === "hline" || active === "vline" || active === "text" ? 1 : active === "fib" ? 2 : 2;
-    if (points.length < needed) return;
-    const d: Drawing = { id: uid(), tool: active, points, color, width, text: active === "text" ? "Note" : undefined };
-    setDrawings(v => [...v, d]);
-    setDraft([]);
-    if (active !== "brush") setActive("cross");
-  };
-
-  const onDown = (e: React.PointerEvent) => {
-    if (!drawing) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const p = toPoint(e);
-    if (!p) return;
-    if (active === "hline" || active === "vline" || active === "text") finish([p]);
-    else setDraft([p]);
-  };
-
-  const onMove = (e: React.PointerEvent) => {
-    const p = toPoint(e);
-    if (!p) return;
-    setCursor(p);
-    if (active === "brush" && draft.length) setDraft(v => [...v, p]);
-  };
-
-  const onUp = (e: React.PointerEvent) => {
-    if (!drawing || active === "brush") return;
-    const p = toPoint(e);
-    if (!p || !draft.length) return;
-    finish([...draft, p]);
-  };
-
-  const undo = () => setDrawings(v => v.slice(0, -1));
-  const clear = () => { setDrawings([]); setDraft([]); };
-
-  const renderDrawing = (d: Drawing) => {
-    const p = d.points;
-    const common = { stroke: d.color, strokeWidth: d.width, fill: "none", vectorEffect: "non-scaling-stroke" as const };
-    if (d.tool === "hline") return <line key={d.id} x1={0} x2="100%" y1={p[0].y} y2={p[0].y} {...common} />;
-    if (d.tool === "vline") return <line key={d.id} x1={p[0].x} x2={p[0].x} y1={0} y2="100%" {...common} />;
-    if (d.tool === "trend" || d.tool === "ray" || d.tool === "measure") {
-      const a=p[0], b=p[1]; let x2=b.x, y2=b.y;
-      if (d.tool === "ray") { const dx=b.x-a.x; const dy=b.y-a.y; const k=dx===0?99999:(host.current?.clientWidth||1000-a.x)/dx; x2=a.x+dx*k; y2=a.y+dy*k; }
-      return <g key={d.id}><line x1={a.x} y1={a.y} x2={x2} y2={y2} {...common} />{d.tool === "measure" && <text x={(a.x+b.x)/2} y={(a.y+b.y)/2-6} fill={d.color} fontSize="11">{Math.abs((b.price??0)-(a.price??0)).toPrecision(5)}</text>}</g>;
-    }
-    if (d.tool === "arrow") { const a=p[0],b=p[1]; const ang=Math.atan2(b.y-a.y,b.x-a.x); const s=9; const h1={x:b.x-s*Math.cos(ang-Math.PI/6),y:b.y-s*Math.sin(ang-Math.PI/6)}; const h2={x:b.x-s*Math.cos(ang+Math.PI/6),y:b.y-s*Math.sin(ang+Math.PI/6)}; return <g key={d.id}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} {...common}/><path d={`M ${h1.x} ${h1.y} L ${b.x} ${b.y} L ${h2.x} ${h2.y}`} {...common}/></g>; }
-    if (d.tool === "rect") { const a=p[0],b=p[1]; return <rect key={d.id} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} {...common}/>; }
-    if (d.tool === "circle") { const a=p[0],b=p[1]; const rx=Math.abs(b.x-a.x)/2, ry=Math.abs(b.y-a.y)/2; return <ellipse key={d.id} cx={(a.x+b.x)/2} cy={(a.y+b.y)/2} rx={rx} ry={ry} {...common}/>; }
-    if (d.tool === "fib") { const a=p[0],b=p[1]; const levels=[0,0.236,0.382,0.5,0.618,0.786,1]; const dy=b.y-a.y; return <g key={d.id}>{levels.map(l=><g key={l}><line x1={0} x2="100%" y1={a.y+dy*l} y2={a.y+dy*l} stroke={d.color} strokeWidth={l===0||l===1?d.width:1} opacity={0.75}/><text x={6} y={a.y+dy*l-3} fill={d.color} fontSize="10">{(l*100).toFixed(1)}%</text></g>)}</g>; }
-    if (d.tool === "text") return <text key={d.id} x={p[0].x+6} y={p[0].y-6} fill={d.color} fontSize="12" fontWeight="600">{d.text}</text>;
-    if (d.tool === "brush") return <polyline key={d.id} points={p.map(x=>`${x.x},${x.y}`).join(" ")} {...common}/>;
-    return null;
-  };
-
-  const menu = useMemo(() => QUICK_TOOLS, []);
-  return <>
-    <div className="absolute top-2 left-[82px] z-[75]">
-      <button onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setOpen(v=>!v)}} className="rounded-md border border-[#333] bg-black/90 px-2 py-1 text-[11px] font-semibold text-white shadow-lg hover:bg-[#151515]">Tools</button>
-      {open && <div onPointerDown={e=>e.stopPropagation()} className="absolute left-0 top-8 w-56 rounded-lg border border-[#333] bg-[#090909]/98 p-2 shadow-2xl backdrop-blur">
-        <div className="mb-2 flex items-center justify-between"><span className="text-[10px] uppercase tracking-wider text-[#888]">Drawing tools</span><div className="flex gap-1"><button onClick={undo} className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-white">Undo</button><button onClick={clear} className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-white">Clear</button></div></div>
-        <div className="grid grid-cols-2 gap-1">{menu.map(([label,id])=><button key={id} onClick={()=>{setActive(id);setOpen(false);setDraft([])}} className={`rounded px-2 py-1.5 text-left text-[10px] ${active===id?"bg-white text-black":"text-[#ddd] hover:bg-[#1c1c1c]"}`}>{label}</button>)}</div>
-        <div className="mt-2 flex items-center gap-2 border-t border-[#222] pt-2"><input aria-label="Tool color" type="color" value={color} onChange={e=>setColor(e.target.value)} className="h-6 w-7 cursor-pointer bg-transparent"/><select value={width} onChange={e=>setWidth(+e.target.value)} className="rounded border border-[#333] bg-black px-1 py-1 text-[10px] text-white"><option value={1}>1 px</option><option value={2}>2 px</option><option value={3}>3 px</option><option value={4}>4 px</option></select><span className="text-[10px] text-[#777]">Style</span></div>
-      </div>}
-    </div>
-    <div ref={host} className={`absolute inset-0 z-[50] ${drawing?"cursor-crosshair":"pointer-events-none"}`} style={{height}} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={()=>setDraft([])}>
-      <svg className="absolute inset-0 h-full w-full" width="100%" height="100%" style={{overflow:"visible"}}>{drawings.map(renderDrawing)}{draft.length>0 && renderDrawing({id:"draft",tool:active,points:draft.concat(cursor&&active!=="brush"?[cursor]:[]),color,width})}{cursor && active==="cross" && <g><line x1={0} x2="100%" y1={cursor.y} y2={cursor.y} stroke={color} strokeWidth="1" strokeDasharray="4 4" opacity="0.6"/><line x1={cursor.x} x2={cursor.x} y1={0} y2="100%" stroke={color} strokeWidth="1" strokeDasharray="4 4" opacity="0.6"/></g>}</svg>
-      {cursor && active==="cross" && <div className="absolute rounded bg-black/90 px-1.5 py-0.5 text-[9px] font-mono text-white pointer-events-none" style={{left:Math.min(cursor.x+8,Math.max(0,(host.current?.clientWidth||100)-90)),top:Math.min(cursor.y+8,Math.max(0,height-22))}}>{cursor.price==null?"":cursor.price.toPrecision(6)}</div>}
-    </div>
-  </>;
+export function DrawingToolsOverlay({chart,series,height}:Props){
+ const host=useRef<HTMLDivElement>(null);const[open,setOpen]=useState(false);const[active,setActive]=useState("cross");const[drawings,setDrawings]=useState<Drawing[]>([]);const[draft,setDraft]=useState<Point[]>([]);const[cursor,setCursor]=useState<Point|null>(null);const[color,setColor]=useState("#f5f5f5");const[width,setWidth]=useState(2);const drawing=active!=="cross";
+ useEffect(()=>{try{const s=JSON.parse(localStorage.getItem("jk-drawings")||"[]");if(Array.isArray(s))setDrawings(s)}catch{}},[]);useEffect(()=>{try{localStorage.setItem("jk-drawings",JSON.stringify(drawings))}catch{}},[drawings]);
+ const toPoint=(e:ReactPointerEvent):Point|null=>{const r=host.current?.getBoundingClientRect(),c=chart.current,s=series.current;if(!r||!c||!s)return null;const x=Math.max(0,Math.min(r.width,e.clientX-r.left)),y=Math.max(0,Math.min(r.height,e.clientY-r.top)),t=c.timeScale().coordinateToTime(x),p=s.coordinateToPrice(y);return{x,y,time:typeof t==="number"?t:undefined,price:p===null?undefined:p}};
+ const finish=(points:Point[])=>{const need=active==="hline"||active==="vline"||active==="text"?1:2;if(points.length<need)return;setDrawings(v=>[...v,{id:uid(),tool:active,points,color,width,text:active==="text"?"Note":undefined}]);setDraft([]);if(active!=="brush")setActive("cross")};
+ const down=(e:ReactPointerEvent)=>{if(!drawing)return;e.currentTarget.setPointerCapture(e.pointerId);const p=toPoint(e);if(!p)return;if(["hline","vline","text"].includes(active))finish([p]);else setDraft([p])};
+ const move=(e:ReactPointerEvent)=>{const p=toPoint(e);if(!p)return;setCursor(p);if(active==="brush"&&draft.length)setDraft(v=>[...v,p])};
+ const up=(e:ReactPointerEvent)=>{if(!drawing||active==="brush")return;const p=toPoint(e);if(p&&draft.length)finish([...draft,p])};
+ const render=(d:Drawing)=>{const p=d.points;if(!p.length)return null;const common={stroke:d.color,strokeWidth:d.width,fill:"none",vectorEffect:"non-scaling-stroke" as const};
+  if(d.tool==="hline")return <line key={d.id} x1={0} x2="100%" y1={p[0].y} y2={p[0].y}{...common}/>;
+  if(d.tool==="vline")return <line key={d.id} x1={p[0].x} x2={p[0].x} y1={0} y2="100%" {...common}/>;
+  if(["trend","ray","measure"].includes(d.tool)){if(!p[1])return null;const a=p[0],b=p[1];let x2=b.x,y2=b.y;if(d.tool==="ray"){const dx=b.x-a.x,dy=b.y-a.y,w=host.current?.clientWidth||1000,k=dx===0?99999:(w-a.x)/dx;x2=a.x+dx*k;y2=a.y+dy*k}return <g key={d.id}><line x1={a.x} y1={a.y} x2={x2} y2={y2}{...common}/>{d.tool==="measure"&&<text x={(a.x+b.x)/2} y={(a.y+b.y)/2-6} fill={d.color} fontSize="11">{Math.abs((b.price??0)-(a.price??0)).toPrecision(5)}</text>}</g>}
+  if(d.tool==="arrow"){if(!p[1])return null;const a=p[0],b=p[1],ang=Math.atan2(b.y-a.y,b.x-a.x),s=9,h1={x:b.x-s*Math.cos(ang-Math.PI/6),y:b.y-s*Math.sin(ang-Math.PI/6)},h2={x:b.x-s*Math.cos(ang+Math.PI/6),y:b.y-s*Math.sin(ang+Math.PI/6)};return <g key={d.id}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y}{...common}/><path d={`M ${h1.x} ${h1.y} L ${b.x} ${b.y} L ${h2.x} ${h2.y}`} {...common}/></g>}
+  if(d.tool==="rect"){if(!p[1])return null;const a=p[0],b=p[1];return <rect key={d.id} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)}{...common}/>}
+  if(d.tool==="circle"){if(!p[1])return null;const a=p[0],b=p[1];return <ellipse key={d.id} cx={(a.x+b.x)/2} cy={(a.y+b.y)/2} rx={Math.abs(b.x-a.x)/2} ry={Math.abs(b.y-a.y)/2}{...common}/>}
+  if(d.tool==="fib"){if(!p[1])return null;const a=p[0],b=p[1],levels=[0,.236,.382,.5,.618,.786,1],dy=b.y-a.y;return <g key={d.id}>{levels.map(l=><g key={l}><line x1={0} x2="100%" y1={a.y+dy*l} y2={a.y+dy*l} stroke={d.color} strokeWidth={l===0||l===1?d.width:1} opacity={.75}/><text x={6} y={a.y+dy*l-3} fill={d.color} fontSize="10">{(l*100).toFixed(1)}%</text></g>)}</g>}
+  if(d.tool==="text")return <text key={d.id} x={p[0].x+6} y={p[0].y-6} fill={d.color} fontSize="12" fontWeight="600">{d.text}</text>;
+  if(d.tool==="brush")return <polyline key={d.id} points={p.map(x=>`${x.x},${x.y}`).join(" ")} {...common}/>;return null};
+ const menu=useMemo(()=>QUICK_TOOLS,[]);
+ return <><div className="absolute top-2 left-[82px] z-[75]"><button onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setOpen(v=>!v)}} className="rounded-md border border-[#333] bg-black/90 px-2 py-1 text-[11px] font-semibold text-white shadow-lg hover:bg-[#151515]">Tools</button>{open&&<div onPointerDown={e=>e.stopPropagation()} className="absolute left-0 top-8 w-56 rounded-lg border border-[#333] bg-[#090909]/98 p-2 shadow-2xl backdrop-blur"><div className="mb-2 flex items-center justify-between"><span className="text-[10px] uppercase tracking-wider text-[#888]">Drawing tools</span><div className="flex gap-1"><button onClick={()=>setDrawings(v=>v.slice(0,-1))} className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-white">Undo</button><button onClick={()=>{setDrawings([]);setDraft([])}} className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-white">Clear</button></div></div><div className="grid grid-cols-2 gap-1">{menu.map(([label,id])=><button key={id} onClick={()=>{setActive(id);setOpen(false);setDraft([])}} className={`rounded px-2 py-1.5 text-left text-[10px] ${active===id?"bg-white text-black":"text-[#ddd] hover:bg-[#1c1c1c]"}`}>{label}</button>)}</div><div className="mt-2 flex items-center gap-2 border-t border-[#222] pt-2"><input aria-label="Tool color" type="color" value={color} onChange={e=>setColor(e.target.value)} className="h-6 w-7 cursor-pointer bg-transparent"/><select value={width} onChange={e=>setWidth(+e.target.value)} className="rounded border border-[#333] bg-black px-1 py-1 text-[10px] text-white"><option value={1}>1 px</option><option value={2}>2 px</option><option value={3}>3 px</option><option value={4}>4 px</option></select><span className="text-[10px] text-[#777]">Line width</span></div></div>}</div><div ref={host} className={`absolute inset-0 z-[50] ${drawing?"cursor-crosshair":"pointer-events-none"}`} style={{height,touchAction:drawing?"none":"auto"}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={()=>setDraft([])}><svg className="absolute inset-0 h-full w-full" width="100%" height="100%" style={{overflow:"visible"}}>{drawings.map(render)}{draft.length>0&&render({id:"draft",tool:active,points:draft.concat(cursor&&active!=="brush"?[cursor]:[]),color,width})}{cursor&&active==="cross"&&<g><line x1={0} x2="100%" y1={cursor.y} y2={cursor.y} stroke={color} strokeWidth="1" strokeDasharray="4 4" opacity=".6"/><line x1={cursor.x} x2={cursor.x} y1={0} y2="100%" stroke={color} strokeWidth="1" strokeDasharray="4 4" opacity=".6"/></g>}</svg>{cursor&&active==="cross"&&<div className="absolute rounded bg-black/90 px-1.5 py-0.5 text-[9px] font-mono text-white pointer-events-none" style={{left:Math.min(cursor.x+8,Math.max(0,(host.current?.clientWidth||100)-90)),top:Math.min(cursor.y+8,Math.max(0,height-22))}}>{cursor.price==null?"":cursor.price.toPrecision(6)}</div>}</div></>;
 }
