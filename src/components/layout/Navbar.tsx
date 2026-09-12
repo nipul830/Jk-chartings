@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, List, Settings, Search, Sun, Moon, BrainCircuit } from "lucide-react";
+import { BarChart3, List, Settings, Search, Sun, Moon, BrainCircuit, ArrowLeftRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PineEditor } from "@/components/chart/PineEditor";
 
@@ -53,6 +53,10 @@ export function Navbar() {
         <Link href="/algo" className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${pathname === "/algo" ? "bg-white text-black" : "text-[#aaa] hover:text-white hover:bg-[#111]"}`}>
           <BrainCircuit size={16} />
           <span className="hidden sm:inline">Algo</span>
+        </Link>
+        <Link href="/trade" className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${pathname === "/trade" ? "bg-white text-black" : "text-[#aaa] hover:text-white hover:bg-[#111]"}`}>
+          <ArrowLeftRight size={16} />
+          <span className="hidden sm:inline">Trade</span>
         </Link>
       </div>
       <div className="ml-auto flex items-center gap-2">
