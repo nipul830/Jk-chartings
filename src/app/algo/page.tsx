@@ -14,11 +14,20 @@ export default function AlgoPage() {
   const [symbol, setSymbol] = useState("BTCUSDT");
   const [timeframe, setTimeframe] = useState("15m");
   const [capital, setCapital] = useState("1000");
+  const [indicators, setIndicators] = useState<{id:string;name:string}[]>([]);
   const [running, setRunning] = useState(false);
   const [paperTrading, setPaperTrading] = useState(true);
   const [tested, setTested] = useState(false);
 
   useEffect(() => {
+    const loadIndicators = () => {
+      try {
+        const raw = JSON.parse(localStorage.getItem("jk-indicators") || "[]");
+        setIndicators(Array.isArray(raw) ? raw.filter((x) => x && typeof x.name === "string") : []);
+      } catch { setIndicators([]); }
+    };
+    loadIndicators();
+    window.addEventListener("jk-indicators-changed", loadIndicators);
     const saved = localStorage.getItem("jk-algo-settings");
     if (!saved) return;
     try {
@@ -31,6 +40,10 @@ export default function AlgoPage() {
       if (typeof data.running === "boolean") setRunning(data.running);
       if (typeof data.paperTrading === "boolean") setPaperTrading(data.paperTrading);
     } catch {}
+  }, []);
+
+  useEffect(() => {
+    return () => window.removeEventListener("jk-indicators-changed", () => {});
   }, []);
 
   useEffect(() => {
@@ -73,6 +86,7 @@ export default function AlgoPage() {
               <label className="text-sm text-[#aaa]">Timeframe<select value={timeframe} onChange={(e)=>setTimeframe(e.target.value)} className="mt-1 w-full rounded-lg border border-[#333] bg-black px-3 py-2 text-white">{["1m","5m","15m","1h","4h","1d"].map((v)=><option key={v}>{v}</option>)}</select></label>
             </div>
             <label className="mt-3 block text-sm text-[#aaa]">Starting capital<input type="number" min="0" value={capital} onChange={(e)=>setCapital(e.target.value)} className="mt-1 w-full rounded-lg border border-[#333] bg-black px-3 py-2 text-white sm:max-w-xs"/></label>
+            <div className="mt-6"><h2 className="mb-3 font-semibold">Indicators from Settings</h2><div className="flex flex-wrap gap-2">{indicators.length ? indicators.map((item)=><span key={item.id} className="rounded-lg border border-[#333] px-3 py-1.5 text-sm text-[#aaa]">{item.name}</span>) : <span className="text-sm text-[#666]">No indicators selected in Settings.</span>}</div><p className="mt-2 text-xs text-[#666]">Manage indicators from Settings. Changes sync automatically to Algo.</p></div>
 
             <div className="mt-6"><h2 className="mb-3 font-semibold">Exit rules</h2><div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm text-[#aaa]">Take profit %<input type="number" defaultValue="2" className="mt-1 w-full rounded-lg border border-[#333] bg-black px-3 py-2"/></label>
