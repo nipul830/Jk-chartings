@@ -3,12 +3,6 @@
 import { useEffect, useState } from "react";
 import { BrainCircuit, Play, Pause, RotateCcw } from "lucide-react";
 
-type Condition = { id: number; indicator: "RSI" | "EMA"; operator: ">" | "<" | "crosses above" | "crosses below"; value: string };
-const initialConditions: Condition[] = [
-  { id: 1, indicator: "RSI", operator: "<", value: "30" },
-  { id: 2, indicator: "EMA", operator: "crosses above", value: "EMA 20" },
-];
-
 export default function AlgoPage() {
   const [name, setName] = useState("My Strategy");
   const [symbol, setSymbol] = useState("BTCUSDT");
@@ -36,18 +30,13 @@ export default function AlgoPage() {
       if (typeof data.symbol === "string") setSymbol(data.symbol);
       if (typeof data.timeframe === "string") setTimeframe(data.timeframe);
       if (typeof data.capital === "string") setCapital(data.capital);
-      if (Array.isArray(data.conditions)) setConditions(data.conditions);
       if (typeof data.running === "boolean") setRunning(data.running);
       if (typeof data.paperTrading === "boolean") setPaperTrading(data.paperTrading);
     } catch {}
   }, []);
 
   useEffect(() => {
-    return () => window.removeEventListener("jk-indicators-changed", () => {});
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("jk-algo-settings", JSON.stringify({ name, symbol, timeframe, capital, conditions, running, paperTrading }));
+    localStorage.setItem("jk-algo-settings", JSON.stringify({ name, symbol, timeframe, capital, running, paperTrading }));
   }, [name, symbol, timeframe, capital, running, paperTrading]);
 
   useEffect(() => {
