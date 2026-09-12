@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, List, Settings, Search, Sun, Moon } from "lucide-react";
+import { BarChart3, List, Settings, Search, Sun, Moon, BrainCircuit } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PineEditor } from "@/components/chart/PineEditor";
 
@@ -50,6 +50,10 @@ export function Navbar() {
           );
         })}
         <PineEditor />
+        <Link href="/algo" className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${pathname === "/algo" ? "bg-white text-black" : "text-[#aaa] hover:text-white hover:bg-[#111]"}`}>
+          <BrainCircuit size={16} />
+          <span className="hidden sm:inline">Algo</span>
+        </Link>
       </div>
       <div className="ml-auto flex items-center gap-2">
         <button type="button" onClick={toggleTheme} aria-label={dark ? "Switch to day mode" : "Switch to night mode"} title={dark ? "Day mode" : "Night mode"} className="w-9 h-9 flex items-center justify-center text-[#aaa] hover:text-white border border-[#333] rounded hover:border-white transition-colors">
